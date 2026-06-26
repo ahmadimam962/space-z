@@ -59,7 +59,6 @@ from app.audit import router as audit_router
 
 # Create all database tables (if they don't already exist)
 # Note: In production, prefer using Alembic migrations instead
-Base.metadata.create_all(bind=engine)
 
 # Initialize the FastAPI application
 app = FastAPI(
