@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard - Space Z</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Tajawal', sans-serif; background:#060911; }
+    .glass { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(15px); border:1px solid rgba(255,255,255,.1); }
+  </style>
+</head>
+<body class="text-zinc-100 min-h-screen">
+
+<nav class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+    <div class="text-2xl font-bold text-teal-400">SPACE <span class="text-white">Z</span> Admin</div>
+    <button onclick="logout()" class="bg-red-500/10 border border-red-500 text-red-400 px-4 py-2 rounded-xl hover:bg-red-500 hover:text-white">
+      تسجيل الخروج
+    </button>
+  </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-6 py-10">
+
+  <h1 class="text-3xl font-bold mb-8">لوحة تحكم الأدمن</h1>
+
+  <section class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+    <div class="glass p-5 rounded-2xl"><p class="text-zinc-400 text-sm">كل المستخدمين</p><h2 id="totalUsers" class="text-2xl font-bold text-teal-400">0</h2></div>
+    <div class="glass p-5 rounded-2xl"><p class="text-zinc-400 text-sm">الطلاب</p><h2 id="totalStudents" class="text-2xl font-bold">0</h2></div>
+    <div class="glass p-5 rounded-2xl"><p class="text-zinc-400 text-sm">الأدمن</p><h2 id="totalAdmins" class="text-2xl font-bold">0</h2></div>
+    <div class="glass p-5 rounded-2xl"><p class="text-zinc-400 text-sm">المحظورين</p><h2 id="bannedUsers" class="text-2xl font-bold text-red-400">0</h2></div>
+    <div class="glass p-5 rounded-2xl"><p class="text-zinc-400 text-sm">Google</p><h2 id="googleUsers" class="text-2xl font-bold">0</h2></div>
+    <div class="glass p-5 rounded-2xl"><p class="text-zinc-400 text-sm">Local</p><h2 id="localUsers" class="text-2xl font-bold">0</h2></div>
+  </section>
+  <div class="glass p-4 rounded-2xl mb-6 flex flex-wrap gap-3">
+  <button onclick="showAdminSection('usersSection')" class="admin-tab bg-teal-500 text-slate-950 font-bold px-4 py-2 rounded-xl">
+    المستخدمين
+  </button>
+
+  <button onclick="showAdminSection('coursesSection')" class="admin-tab bg-slate-950 border border-slate-800 px-4 py-2 rounded-xl">
+    الكورسات
+  </button>
+
+  <button onclick="showAdminSection('paymentsSection')" class="admin-tab bg-slate-950 border border-slate-800 px-4 py-2 rounded-xl">
+    طرق الدفع
+  </button>
+
+  <button onclick="showAdminSection('purchasesSection')" class="admin-tab bg-slate-950 border border-slate-800 px-4 py-2 rounded-xl">
+    طلبات الشراء
+  </button>
+</div>
+<div id="usersSection" class="admin-section">
+  <section class="glass p-5 rounded-2xl mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <input id="searchInput" type="text" placeholder="بحث بالاسم أو الإيميل أو الهاتف" class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-teal-500">
+      <select id="roleFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+        <option value="">كل الصلاحيات</option>
+        <option value="student">Student</option>
+        <option value="admin">Admin</option>
+      </select>
+      <select id="providerFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+        <option value="">كل طرق الدخول</option>
+        <option value="local">Local</option>
+        <option value="google">Google</option>
+      </select>
+      <select id="banFilter" class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+        <option value="">الكل</option>
+        <option value="false">غير محظور</option>
+        <option value="true">محظور</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="glass rounded-2xl overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-950/70 text-zinc-300">
+          <tr>
+            <th class="p-4 text-right">ID</th>
+            <th class="p-4 text-right">الاسم</th>
+            <th class="p-4 text-right">الإيميل</th>
+            <th class="p-4 text-right">الهاتف</th>
+            <th class="p-4 text-right">Role</th>
+            <th class="p-4 text-right">Provider</th>
+            <th class="p-4 text-right">الحالة</th>
+            <th class="p-4 text-right">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="usersTable"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<section id="coursesSection" class="admin-section glass p-5 rounded-2xl mt-8 hidden">
+  <section class="glass p-5 rounded-2xl mt-8">
+  <div class="flex justify-between items-center mb-5">
+    <h2 class="text-2xl font-bold">إدارة الكورسات</h2>
+    <button onclick="openCourseModal()" class="bg-teal-500 hover:bg-teal-600 text-slate-950 font-bold px-4 py-2 rounded-xl">
+      إضافة كورس
+    </button>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-950/70 text-zinc-300">
+        <tr>
+          <th class="p-4 text-right">ID</th>
+          <th class="p-4 text-right">العنوان</th>
+          <th class="p-4 text-right">السعر</th>
+          <th class="p-4 text-right">الحالة</th>
+          <th class="p-4 text-right">مدفوع؟</th>
+          <th class="p-4 text-right">مميز؟</th>
+          <th class="p-4 text-right">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody id="coursesTable"></tbody>
+    </table>
+  </div>
+</section>
+</section>
+<section id="paymentsSection" class="admin-section glass p-5 rounded-2xl mt-8 hidden">
+<section class="glass p-5 rounded-2xl mt-8">
+  <div class="flex justify-between items-center mb-5">
+    <h2 class="text-2xl font-bold">إدارة طرق الدفع</h2>
+    <button onclick="openPaymentModal()" class="bg-teal-500 hover:bg-teal-600 text-slate-950 font-bold px-4 py-2 rounded-xl">
+      إضافة طريقة دفع
+    </button>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-950/70 text-zinc-300">
+        <tr>
+          <th class="p-4 text-right">ID</th>
+          <th class="p-4 text-right">الطريقة</th>
+          <th class="p-4 text-right">اسم الحساب</th>
+          <th class="p-4 text-right">رقم الحساب</th>
+          <th class="p-4 text-right">الحالة</th>
+          <th class="p-4 text-right">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody id="paymentsTable"></tbody>
+    </table>
+  </div>
+</section>
+</section>
+<section id="purchasesSection" class="admin-section glass p-5 rounded-2xl mt-8 hidden">
+<section class="glass p-5 rounded-2xl mt-8">
+  <div class="flex justify-between items-center mb-5">
+    <h2 class="text-2xl font-bold">طلبات الشراء</h2>
+
+    <select id="purchaseStatusFilter" onchange="loadPurchaseRequests()"
+      class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+      <option value="">كل الطلبات</option>
+      <option value="pending">Pending</option>
+      <option value="approved">Approved</option>
+      <option value="rejected">Rejected</option>
+    </select>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-950/70 text-zinc-300">
+        <tr>
+          <th class="p-4 text-right">ID</th>
+          <th class="p-4 text-right">وقت الطلب</th>
+          <th class="p-4 text-right">الطالب</th>
+          <th class="p-4 text-right">الهاتف</th>
+          <th class="p-4 text-right">الكورس</th>
+          <th class="p-4 text-right">المبلغ</th>
+          <th class="p-4 text-right">رقم التحويلة</th>
+          <th class="p-4 text-right">الحالة</th>
+          <th class="p-4 text-right">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody id="purchaseRequestsTable"></tbody>
+    </table>
+  </div>
+</section>
+</section>
+
+</main>
+
+<div id="userModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 p-4">
+  <div class="glass w-full max-w-2xl rounded-3xl p-6">
+    <div class="flex justify-between items-center mb-5">
+      <h2 class="text-2xl font-bold">تفاصيل المستخدم</h2>
+      <button onclick="closeModal()" class="text-zinc-400 hover:text-red-400">✕</button>
+    </div>
+    <div id="userDetails" class="space-y-3"></div>
+  </div>
+</div>
+
+<div id="courseModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 p-4">
+  <div class="glass w-full max-w-xl rounded-3xl p-6">
+    <div class="flex justify-between items-center mb-5">
+      <h2 id="courseModalTitle" class="text-2xl font-bold">إضافة كورس</h2>
+      <button onclick="closeCourseModal()" class="text-zinc-400 hover:text-red-400">✕</button>
+    </div>
+
+    <input type="hidden" id="courseId">
+
+    <div class="space-y-4">
+      <input id="courseTitle" type="text" placeholder="عنوان الكورس"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-teal-500">
+
+      <textarea id="courseDescription" placeholder="وصف الكورس"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-teal-500 min-h-[100px]"></textarea>
+
+      <input id="coursePrice" type="number" placeholder="السعر"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-teal-500">
+
+      <input id="courseThumbnail" type="text" placeholder="رابط صورة الكورس"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-teal-500">
+
+      <select id="courseStatus"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+        <option value="hidden">Hidden</option>
+        <option value="active">Active</option>
+      </select>
+
+      <select id="courseIsPaid"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+        <option value="true">مدفوع</option>
+        <option value="false">مجاني</option>
+      </select>
+
+      <select id="courseIsFeatured"
+  class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+  <option value="false">غير مميز</option>
+  <option value="true">مميز</option>
+</select>
+
+      <p id="courseMessage" class="text-sm text-red-400"></p>
+
+      <button onclick="saveCourse()" class="w-full bg-teal-500 hover:bg-teal-600 text-slate-950 font-bold py-3 rounded-xl">
+        حفظ الكورس
+      </button>
+    </div>
+  </div>
+</div>
+<div id="paymentModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 p-4">
+  <div class="glass w-full max-w-xl rounded-3xl p-6">
+    <div class="flex justify-between items-center mb-5">
+      <h2 id="paymentModalTitle" class="text-2xl font-bold">إضافة طريقة دفع</h2>
+      <button onclick="closePaymentModal()" class="text-zinc-400 hover:text-red-400">✕</button>
+    </div>
+
+    <input type="hidden" id="paymentId">
+
+    <div class="space-y-4">
+      <input id="paymentMethodName" type="text" placeholder="اسم الطريقة مثل Zain Cash"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-teal-500">
+
+      <input id="paymentAccountName" type="text" placeholder="اسم الحساب"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-teal-500">
+
+      <input id="paymentAccountNumber" type="text" placeholder="رقم الحساب / رقم المحفظة"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-teal-500">
+
+      <textarea id="paymentInstructions" placeholder="تعليمات الدفع"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-teal-500 min-h-[100px]"></textarea>
+
+      <select id="paymentIsActive"
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+        <option value="true">Active</option>
+        <option value="false">Hidden</option>
+      </select>
+
+      <p id="paymentMessage" class="text-sm text-red-400"></p>
+
+      <button onclick="savePayment()" class="w-full bg-teal-500 hover:bg-teal-600 text-slate-950 font-bold py-3 rounded-xl">
+        حفظ طريقة الدفع
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="contentModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 p-4">
+  <div class="glass w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl p-6">
+    <div class="flex justify-between items-center mb-5">
+      <h2 id="contentModalTitle" class="text-2xl font-bold">إدارة المحتوى</h2>
+      <button onclick="closeContentModal()" class="text-zinc-400 hover:text-red-400">✕</button>
+    </div>
+
+    <div class="glass p-4 rounded-2xl mb-6">
+      <h3 class="font-bold mb-3">إضافة Section</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <input id="sectionTitle" placeholder="اسم السكشن"
+          class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+        <input id="sectionOrder" type="number" value="1"
+          class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+        <button onclick="createSection()"
+          class="bg-teal-500 text-slate-950 font-bold rounded-xl">
+          إضافة
+        </button>
+      </div>
+      <p id="contentMessage" class="text-sm text-red-400 mt-3"></p>
+    </div>
+
+    <div id="sectionsContainer" class="space-y-5"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = "http://localhost:5000";
+const token = localStorage.getItem("token");
+
+if (!token) {
+  window.location.href = "login.html";
+}
+
+function authHeaders() {
+  return { "Authorization": `Bearer ${token}` };
+}
+
+async function logout() {
+  const token = localStorage.getItem("token");
+  const deviceId = localStorage.getItem("deviceId");
+
+  if (token && deviceId) {
+    try {
+      await fetch("http://localhost:5000/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          deviceId: deviceId
+        })
+      });
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
+  }
+
+  localStorage.clear();
+  sessionStorage.clear();
+  window.location.href = "login.html";
+}
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(API_BASE + url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...authHeaders()
+    }
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    alert("غير مصرح لك بالدخول");
+    window.location.href = "login.html";
+    return null;
+  }
+
+  return await res.json();
+}
+
+async function loadStats() {
+  const data = await apiFetch("/api/admin/stats");
+  if (!data || !data.success) return;
+
+  const s = data.data;
+  totalUsers.innerText = s.totalUsers;
+  totalStudents.innerText = s.totalStudents;
+  totalAdmins.innerText = s.totalAdmins;
+  bannedUsers.innerText = s.bannedUsers;
+  googleUsers.innerText = s.googleUsers;
+  localUsers.innerText = s.localUsers;
+}
+
+function buildUsersQuery() {
+  const params = new URLSearchParams();
+
+  const search = searchInput.value.trim();
+  const role = roleFilter.value;
+  const provider = providerFilter.value;
+  const banned = banFilter.value;
+
+  if (search) params.append("search", search);
+  if (role) params.append("role", role);
+  if (provider) params.append("auth_provider", provider);
+  if (banned !== "") params.append("is_banned", banned);
+
+  return params.toString();
+}
+
+async function loadUsers() {
+  const query = buildUsersQuery();
+  const data = await apiFetch(`/api/admin/users?${query}`);
+  if (!data || !data.success) return;
+
+  usersTable.innerHTML = "";
+
+  data.data.forEach(user => {
+    const row = document.createElement("tr");
+    row.className = "border-t border-slate-800 hover:bg-slate-800/40";
+
+    row.innerHTML = `
+      <td class="p-4">${user.id}</td>
+      <td class="p-4">${user.firstName} ${user.lastName}</td>
+      <td class="p-4">${user.email}</td>
+      <td class="p-4">${user.phoneNumber || "-"}</td>
+      <td class="p-4">${user.role}</td>
+      <td class="p-4">${user.authProvider}</td>
+      <td class="p-4">
+        ${user.isBanned 
+          ? '<span class="text-red-400">محظور</span>' 
+          : '<span class="text-teal-400">نشط</span>'}
+      </td>
+      <td class="p-4 flex flex-wrap gap-2">
+        <button onclick="showDetails(${user.id})" class="px-3 py-1 rounded-lg bg-blue-500/10 border border-blue-500 text-blue-400">تفاصيل</button>
+        ${
+          user.isBanned
+          ? `<button onclick="unbanUser(${user.id})" class="px-3 py-1 rounded-lg bg-teal-500/10 border border-teal-500 text-teal-400">Unban</button>`
+          : `<button onclick="banUser(${user.id})" class="px-3 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500 text-yellow-400">Ban</button>`
+        }
+        <button onclick="deleteUser(${user.id})" class="px-3 py-1 rounded-lg bg-red-500/10 border border-red-500 text-red-400">حذف</button>
+      </td>
+    `;
+
+    usersTable.appendChild(row);
+  });
+}
+
+async function showDetails(userId) {
+  const data = await apiFetch(`/api/admin/users/${userId}`);
+  if (!data || !data.success) return;
+
+  const u = data.data;
+
+  userDetails.innerHTML = `
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      <p><span class="text-zinc-400">ID:</span> ${u.id}</p>
+      <p><span class="text-zinc-400">الاسم:</span> ${u.firstName} ${u.lastName}</p>
+      <p><span class="text-zinc-400">الإيميل:</span> ${u.email}</p>
+      <p><span class="text-zinc-400">الهاتف:</span> ${u.phoneNumber || "-"}</p>
+      <p><span class="text-zinc-400">Role:</span> ${u.role}</p>
+      <p><span class="text-zinc-400">Provider:</span> ${u.authProvider}</p>
+      <p><span class="text-zinc-400">Email Verified:</span> ${u.isEmailVerified}</p>
+      <p><span class="text-zinc-400">Banned:</span> ${u.isBanned}</p>
+    </div>
+
+    <hr class="border-slate-800 my-4">
+
+    <h3 class="font-bold mb-3">الأجهزة</h3>
+    <div class="space-y-2">
+      ${
+        u.devices.length
+        ? u.devices.map(d => `
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 flex justify-between gap-3 items-center">
+            <div class="text-xs break-all">
+              <p><span class="text-zinc-400">Device:</span> ${d.deviceId}</p>
+              <p><span class="text-zinc-400">Last login:</span> ${d.lastLoginAt}</p>
+            </div>
+            <button onclick="removeDevice(${u.id}, ${d.id})" class="px-3 py-1 rounded-lg bg-red-500/10 border border-red-500 text-red-400 text-xs">
+              حذف الجهاز
+            </button>
+          </div>
+        `).join("")
+        : '<p class="text-zinc-400">لا يوجد أجهزة</p>'
+      }
+    </div>
+  `;
+
+  userModal.classList.remove("hidden");
+  userModal.classList.add("flex");
+}
+
+function closeModal() {
+  userModal.classList.add("hidden");
+  userModal.classList.remove("flex");
+}
+
+async function banUser(id) {
+  if (!confirm("هل تريد حظر المستخدم؟")) return;
+  await apiFetch(`/api/admin/users/${id}/ban`, { method: "POST" });
+  await refresh();
+}
+
+async function unbanUser(id) {
+  await apiFetch(`/api/admin/users/${id}/unban`, { method: "POST" });
+  await refresh();
+}
+
+async function deleteUser(id) {
+  if (!confirm("حذف المستخدم نهائياً؟")) return;
+  await apiFetch(`/api/admin/users/${id}`, { method: "DELETE" });
+  await refresh();
+}
+
+async function removeDevice(userId, deviceId) {
+  if (!confirm("حذف هذا الجهاز من الحساب؟")) return;
+  await apiFetch(`/api/admin/users/${userId}/devices/${deviceId}`, { method: "DELETE" });
+  await showDetails(userId);
+}
+
+async function refresh() {
+  await loadStats();
+  await loadUsers();
+  await loadCourses();
+  await loadPayments();
+  await loadPurchaseRequests();
+}
+
+searchInput.addEventListener("input", loadUsers);
+roleFilter.addEventListener("change", loadUsers);
+providerFilter.addEventListener("change", loadUsers);
+banFilter.addEventListener("change", loadUsers);
+
+refresh();
+
+let editingCourseId = null;
+
+async function loadCourses() {
+  const data = await apiFetch("/api/admin/courses");
+  if (!data || !data.success) return;
+
+  coursesTable.innerHTML = "";
+
+  data.data.forEach(course => {
+    const row = document.createElement("tr");
+    row.className = "border-t border-slate-800 hover:bg-slate-800/40";
+
+    row.innerHTML = `
+      <td class="p-4">${course.id}</td>
+      <td class="p-4">${course.title}</td>
+      <td class="p-4">${course.price}</td>
+      <td class="p-4">
+        ${course.status === "active"
+          ? '<span class="text-teal-400">Active</span>'
+          : '<span class="text-yellow-400">Hidden</span>'}
+      </td>
+      <td class="p-4">${course.isPaid ? "نعم" : "لا"}</td>
+      <td class="p-4">${course.isFeatured ? "⭐ نعم" : "لا"}</td>
+      <td class="p-4 flex flex-wrap gap-2">
+        <button onclick='editCourse(${JSON.stringify(course)})'
+          class="px-3 py-1 rounded-lg bg-blue-500/10 border border-blue-500 text-blue-400">
+          تعديل
+        </button>
+        <button onclick="openContentManager(${course.id}, '${course.title.replace(/'/g, "\\'")}')"
+  class="px-3 py-1 rounded-lg bg-purple-500/10 border border-purple-500 text-purple-400">
+  المحتوى
+</button>
+        <button onclick="deleteCourse(${course.id})"
+          class="px-3 py-1 rounded-lg bg-red-500/10 border border-red-500 text-red-400">
+          حذف
+        </button>
+      </td>
+    `;
+
+    coursesTable.appendChild(row);
+  });
+}
+
+function openCourseModal() {
+  editingCourseId = null;
+  courseModalTitle.innerText = "إضافة كورس";
+  courseId.value = "";
+  courseTitle.value = "";
+  courseDescription.value = "";
+  coursePrice.value = "";
+  courseThumbnail.value = "";
+  courseStatus.value = "hidden";
+  courseIsPaid.value = "true";
+  courseMessage.innerText = "";
+  courseIsFeatured.value = "false";
+
+  courseModal.classList.remove("hidden");
+  courseModal.classList.add("flex");
+}
+
+function closeCourseModal() {
+  courseModal.classList.add("hidden");
+  courseModal.classList.remove("flex");
+}
+
+function editCourse(course) {
+  editingCourseId = course.id;
+  courseModalTitle.innerText = "تعديل كورس";
+  courseId.value = course.id;
+  courseTitle.value = course.title || "";
+  courseDescription.value = course.description || "";
+  coursePrice.value = course.price || 0;
+  courseThumbnail.value = course.thumbnailUrl || "";
+  courseStatus.value = course.status || "hidden";
+  courseIsPaid.value = course.isPaid ? "true" : "false";
+  courseMessage.innerText = "";
+  courseIsFeatured.value = course.isFeatured ? "true" : "false";
+
+  courseModal.classList.remove("hidden");
+  courseModal.classList.add("flex");
+}
+
+async function saveCourse() {
+  const payload = {
+    title: courseTitle.value.trim(),
+    description: courseDescription.value.trim(),
+    price: Number(coursePrice.value || 0),
+    thumbnail_url: courseThumbnail.value.trim(),
+    status: courseStatus.value,
+    is_paid: courseIsPaid.value === "true",
+    is_featured: courseIsFeatured.value === "true"
+  };
+
+  if (!payload.title) {
+    courseMessage.innerText = "عنوان الكورس مطلوب";
+    return;
+  }
+
+  if (payload.price < 0) {
+    courseMessage.innerText = "السعر غير صحيح";
+    return;
+  }
+
+  const url = editingCourseId
+    ? `/api/admin/courses/${editingCourseId}`
+    : "/api/admin/courses";
+
+  const method = editingCourseId ? "PUT" : "POST";
+
+  const data = await apiFetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!data || !data.success) {
+    courseMessage.innerText = data?.detail || "حدث خطأ";
+    return;
+  }
+
+  closeCourseModal();
+  await loadCourses();
+}
+
+async function deleteCourse(id) {
+  if (!confirm("حذف الكورس؟")) return;
+
+  const data = await apiFetch(`/api/admin/courses/${id}`, {
+    method: "DELETE"
+  });
+
+  if (!data || !data.success) {
+    alert(data?.detail || "حدث خطأ");
+    return;
+  }
+
+  await loadCourses();
+}
+let editingPaymentId = null;
+
+async function loadPayments() {
+  const data = await apiFetch("/api/admin/payment-settings");
+  if (!data || !data.success) return;
+
+  paymentsTable.innerHTML = "";
+
+  data.data.forEach(payment => {
+    const row = document.createElement("tr");
+    row.className = "border-t border-slate-800 hover:bg-slate-800/40";
+
+    row.innerHTML = `
+      <td class="p-4">${payment.id}</td>
+      <td class="p-4">${payment.methodName}</td>
+      <td class="p-4">${payment.accountName || "-"}</td>
+      <td class="p-4">${payment.accountNumber}</td>
+      <td class="p-4">
+        ${payment.isActive
+          ? '<span class="text-teal-400">Active</span>'
+          : '<span class="text-yellow-400">Hidden</span>'}
+      </td>
+      <td class="p-4 flex flex-wrap gap-2">
+        <button onclick='editPayment(${JSON.stringify(payment)})'
+          class="px-3 py-1 rounded-lg bg-blue-500/10 border border-blue-500 text-blue-400">
+          تعديل
+        </button>
+        <button onclick="deletePayment(${payment.id})"
+          class="px-3 py-1 rounded-lg bg-red-500/10 border border-red-500 text-red-400">
+          حذف
+        </button>
+      </td>
+    `;
+
+    paymentsTable.appendChild(row);
+  });
+}
+
+function openPaymentModal() {
+  editingPaymentId = null;
+  paymentModalTitle.innerText = "إضافة طريقة دفع";
+  paymentId.value = "";
+  paymentMethodName.value = "";
+  paymentAccountName.value = "";
+  paymentAccountNumber.value = "";
+  paymentInstructions.value = "";
+  paymentIsActive.value = "true";
+  paymentMessage.innerText = "";
+
+  paymentModal.classList.remove("hidden");
+  paymentModal.classList.add("flex");
+}
+
+function closePaymentModal() {
+  paymentModal.classList.add("hidden");
+  paymentModal.classList.remove("flex");
+}
+
+function editPayment(payment) {
+  editingPaymentId = payment.id;
+  paymentModalTitle.innerText = "تعديل طريقة دفع";
+  paymentId.value = payment.id;
+  paymentMethodName.value = payment.methodName || "";
+  paymentAccountName.value = payment.accountName || "";
+  paymentAccountNumber.value = payment.accountNumber || "";
+  paymentInstructions.value = payment.instructions || "";
+  paymentIsActive.value = payment.isActive ? "true" : "false";
+  paymentMessage.innerText = "";
+
+  paymentModal.classList.remove("hidden");
+  paymentModal.classList.add("flex");
+}
+
+async function savePayment() {
+  const payload = {
+    method_name: paymentMethodName.value.trim(),
+    account_name: paymentAccountName.value.trim(),
+    account_number: paymentAccountNumber.value.trim(),
+    instructions: paymentInstructions.value.trim(),
+    is_active: paymentIsActive.value === "true"
+  };
+
+  if (!payload.method_name) {
+    paymentMessage.innerText = "اسم طريقة الدفع مطلوب";
+    return;
+  }
+
+  if (!payload.account_number) {
+    paymentMessage.innerText = "رقم الحساب مطلوب";
+    return;
+  }
+
+  const url = editingPaymentId
+    ? `/api/admin/payment-settings/${editingPaymentId}`
+    : "/api/admin/payment-settings";
+
+  const method = editingPaymentId ? "PUT" : "POST";
+
+  const data = await apiFetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!data || !data.success) {
+    paymentMessage.innerText = data?.detail || "حدث خطأ";
+    return;
+  }
+
+  closePaymentModal();
+  await loadPayments();
+}
+
+async function deletePayment(id) {
+  if (!confirm("حذف طريقة الدفع؟")) return;
+
+  const data = await apiFetch(`/api/admin/payment-settings/${id}`, {
+    method: "DELETE"
+  });
+
+  if (!data || !data.success) {
+    alert(data?.detail || "حدث خطأ");
+    return;
+  }
+
+  await loadPayments();
+}
+
+async function loadPurchaseRequests() {
+  const status = purchaseStatusFilter.value;
+  const query = status ? `?status=${status}` : "";
+
+  const data = await apiFetch(`/api/admin/purchase-requests${query}`);
+  if (!data || !data.success) return;
+
+  purchaseRequestsTable.innerHTML = "";
+
+  data.data.forEach(req => {
+    const row = document.createElement("tr");
+    row.className = "border-t border-slate-800 hover:bg-slate-800/40";
+
+    row.innerHTML = `
+      <td class="p-4">${req.id}</td>
+      <td class="p-4">${new Date(req.createdAt).toLocaleString()}</td>
+      <td class="p-4">
+        <div>${req.student.name}</div>
+        <div class="text-xs text-zinc-400">${req.student.email}</div>
+      </td>
+      <td class="p-4">${req.student.phoneNumber || "-"}</td>
+      <td class="p-4">${req.course.title}</td>
+      <td class="p-4">${req.course.price} JOD</td>
+      <td class="p-4 font-bold text-teal-400">${req.transferNumber}</td>
+      <td class="p-4">
+        ${
+          req.status === "pending"
+          ? '<span class="text-yellow-400">Pending</span>'
+          : req.status === "approved"
+          ? '<span class="text-teal-400">Approved</span>'
+          : '<span class="text-red-400">Rejected</span>'
+        }
+      </td>
+      <td class="p-4 flex gap-2 flex-wrap">
+        ${
+          req.status === "pending"
+          ? `
+            <button onclick="approvePurchase(${req.id})"
+              class="px-3 py-1 rounded-lg bg-teal-500/10 border border-teal-500 text-teal-400">
+              قبول
+            </button>
+
+            <button onclick="rejectPurchase(${req.id})"
+              class="px-3 py-1 rounded-lg bg-red-500/10 border border-red-500 text-red-400">
+              رفض
+            </button>
+          `
+          : "-"
+        }
+      </td>
+    `;
+
+    purchaseRequestsTable.appendChild(row);
+  });
+}
+
+
+async function approvePurchase(id) {
+  if (!confirm("قبول الطلب وتفعيل الكورس؟")) return;
+
+  const data = await apiFetch(`/api/admin/purchase-requests/${id}/approve`, {
+    method: "POST"
+  });
+
+  if (!data || !data.success) {
+    alert(data?.detail || "حدث خطأ");
+    return;
+  }
+
+  await loadPurchaseRequests();
+}
+
+
+async function rejectPurchase(id) {
+  if (!confirm("رفض الطلب؟")) return;
+
+  const data = await apiFetch(`/api/admin/purchase-requests/${id}/reject`, {
+    method: "POST"
+  });
+
+  if (!data || !data.success) {
+    alert(data?.detail || "حدث خطأ");
+    return;
+  }
+
+  await loadPurchaseRequests();
+}
+
+function showAdminSection(sectionId) {
+  document.querySelectorAll(".admin-section").forEach(section => {
+    section.classList.add("hidden");
+  });
+
+  document.getElementById(sectionId).classList.remove("hidden");
+
+  document.querySelectorAll(".admin-tab").forEach(btn => {
+    btn.classList.remove("bg-teal-500", "text-slate-950", "font-bold");
+    btn.classList.add("bg-slate-950", "border", "border-slate-800");
+  });
+
+  event.currentTarget.classList.remove("bg-slate-950", "border", "border-slate-800");
+  event.currentTarget.classList.add("bg-teal-500", "text-slate-950", "font-bold");
+}
+
+let selectedContentCourseId = null;
+
+function closeContentModal() {
+  contentModal.classList.add("hidden");
+  contentModal.classList.remove("flex");
+}
+
+async function openContentManager(courseId, courseTitle) {
+  selectedContentCourseId = courseId;
+  contentModalTitle.innerText = "إدارة محتوى: " + courseTitle;
+  sectionTitle.value = "";
+  sectionOrder.value = 1;
+  contentMessage.innerText = "";
+
+  contentModal.classList.remove("hidden");
+  contentModal.classList.add("flex");
+
+  await loadCourseSections();
+}
+
+async function loadCourseSections() {
+  const data = await apiFetch(`/api/admin/courses/${selectedContentCourseId}/sections`);
+  if (!data || !data.success) return;
+
+  sectionsContainer.innerHTML = "";
+
+  if (data.data.length === 0) {
+    sectionsContainer.innerHTML = `<p class="text-zinc-400 text-center">لا يوجد Sections بعد</p>`;
+    return;
+  }
+
+  data.data.forEach(section => {
+    const div = document.createElement("div");
+    div.className = "glass p-5 rounded-2xl";
+
+    div.innerHTML = `
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h3 class="text-xl font-bold">${section.title}</h3>
+          <p class="text-xs text-zinc-500">Order: ${section.sortOrder}</p>
+        </div>
+
+        <button onclick="deleteSection(${section.id})"
+          class="px-3 py-1 rounded-lg bg-red-500/10 border border-red-500 text-red-400">
+          حذف Section
+        </button>
+      </div>
+
+      <div class="space-y-2 mb-4">
+        ${
+          section.lessons.length
+          ? section.lessons.map(lesson => `
+              <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 flex justify-between items-center">
+                <div>
+                  <p class="font-bold">${lesson.title}</p>
+                  <p class="text-xs text-zinc-400">${lesson.lessonType} - Order: ${lesson.sortOrder}</p>
+                </div>
+                <button onclick="deleteLesson(${lesson.id})"
+                  class="px-3 py-1 rounded-lg bg-red-500/10 border border-red-500 text-red-400 text-xs">
+                  حذف
+                </button>
+              </div>
+            `).join("")
+          : `<p class="text-zinc-500 text-sm">لا يوجد Lessons داخل هذا السكشن</p>`
+        }
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <input id="lessonTitle_${section.id}" placeholder="اسم الدرس"
+          class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+
+        <select id="lessonType_${section.id}"
+          class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+          <option value="video">Video</option>
+          <option value="pdf">PDF</option>
+          <option value="text">Text</option>
+        </select>
+
+        <input id="lessonOrder_${section.id}" type="number" value="1"
+          class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+
+        <button onclick="createLesson(${section.id})"
+          class="bg-teal-500 text-slate-950 font-bold rounded-xl">
+          إضافة درس
+        </button>
+      </div>
+
+      <textarea id="lessonDescription_${section.id}" placeholder="وصف الدرس"
+        class="w-full mt-3 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3"></textarea>
+
+      <input id="lessonUrl_${section.id}" placeholder="رابط الفيديو أو PDF"
+        class="w-full mt-3 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+    `;
+
+    sectionsContainer.appendChild(div);
+  });
+}
+
+async function createSection() {
+  const title = sectionTitle.value.trim();
+
+  if (!title) {
+    contentMessage.innerText = "اسم السكشن مطلوب";
+    return;
+  }
+
+  const data = await apiFetch(`/api/admin/courses/${selectedContentCourseId}/sections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title,
+      sort_order: Number(sectionOrder.value || 1)
+    })
+  });
+
+  if (!data || !data.success) {
+    contentMessage.innerText = data?.detail || "حدث خطأ";
+    return;
+  }
+
+  sectionTitle.value = "";
+  sectionOrder.value = 1;
+  contentMessage.innerText = "";
+  await loadCourseSections();
+}
+
+async function createLesson(sectionId) {
+  const title = document.getElementById(`lessonTitle_${sectionId}`).value.trim();
+  const lessonType = document.getElementById(`lessonType_${sectionId}`).value;
+  const sortOrder = Number(document.getElementById(`lessonOrder_${sectionId}`).value || 1);
+  const description = document.getElementById(`lessonDescription_${sectionId}`).value.trim();
+  const url = document.getElementById(`lessonUrl_${sectionId}`).value.trim();
+
+  if (!title) {
+    alert("اسم الدرس مطلوب");
+    return;
+  }
+
+  const payload = {
+    title,
+    description,
+    lesson_type: lessonType,
+    sort_order: sortOrder,
+    is_free_preview: false,
+    video_provider: lessonType === "video" ? "external" : null,
+    video_url: lessonType === "video" ? url : null,
+    pdf_url: lessonType === "pdf" ? url : null,
+    content_text: lessonType === "text" ? description : null
+  };
+
+  const data = await apiFetch(`/api/admin/sections/${sectionId}/lessons`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!data || !data.success) {
+    alert(data?.detail || "حدث خطأ");
+    return;
+  }
+
+  await loadCourseSections();
+}
+
+async function deleteSection(sectionId) {
+  if (!confirm("حذف السكشن وكل الدروس داخله؟")) return;
+
+  await apiFetch(`/api/admin/sections/${sectionId}`, {
+    method: "DELETE"
+  });
+
+  await loadCourseSections();
+}
+
+async function deleteLesson(lessonId) {
+  if (!confirm("حذف الدرس؟")) return;
+
+  await apiFetch(`/api/admin/lessons/${lessonId}`, {
+    method: "DELETE"
+  });
+
+  await loadCourseSections();
+}
+
+</script>
+
+</body>
+</html>

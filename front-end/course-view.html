@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>Course View - Space Z</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family:'Tajawal', sans-serif; background:#060911; }
+    .glass { background:rgba(15,23,42,.75); border:1px solid rgba(255,255,255,.1); backdrop-filter:blur(15px); }
+  </style>
+</head>
+
+<body class="text-zinc-100 min-h-screen">
+
+<nav class="border-b border-slate-800 bg-slate-900/50">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+    <div class="text-2xl font-bold text-teal-400">SPACE <span class="text-white">Z</span> Course</div>
+    <a href="my-courses.html" class="text-teal-400 hover:underline">كورساتي</a>
+  </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-6 py-10">
+
+  <section class="glass p-6 rounded-3xl mb-8">
+    <h1 id="courseTitle" class="text-3xl font-bold mb-3">...</h1>
+    <p id="courseDescription" class="text-zinc-400"></p>
+  </section>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <aside class="glass rounded-3xl p-5 lg:col-span-1">
+      <h2 class="text-xl font-bold mb-5">محتوى الكورس</h2>
+      <div id="sectionsList" class="space-y-5"></div>
+    </aside>
+
+    <section class="glass rounded-3xl p-6 lg:col-span-2 min-h-[500px]">
+      <h2 id="lessonTitle" class="text-2xl font-bold mb-4">
+        اختر درس للبدء
+      </h2>
+
+      <p id="lessonDescription" class="text-zinc-400 mb-6"></p>
+
+      <div id="lessonContent" class="mt-4">
+        <div class="h-64 border border-slate-800 rounded-2xl flex items-center justify-center text-zinc-500">
+          اختر درس من القائمة
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script>
+const API_BASE = "http://localhost:5000";
+const token = localStorage.getItem("token");
+
+if (!token) {
+  window.location.href = "login.html";
+}
+
+const params = new URLSearchParams(window.location.search);
+const courseId = params.get("id");
+
+if (!courseId) {
+  window.location.href = "my-courses.html";
+}
+
+async function loadCourseContent() {
+  const res = await fetch(`${API_BASE}/api/courses/${courseId}/content`, {
+    headers: {
+      "Authorization": `Bearer ${token}`
+    }
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.detail || "لا يمكنك الوصول لهذا الكورس");
+    window.location.href = "my-courses.html";
+    return;
+  }
+
+  courseTitle.innerText = data.course.title;
+  courseDescription.innerText = data.course.description || "";
+
+  renderSections(data.sections);
+}
+
+function renderSections(sections) {
+  sectionsList.innerHTML = "";
+
+  if (!sections.length) {
+    sectionsList.innerHTML = `
+      <p class="text-zinc-500 text-sm">
+        لا يوجد محتوى داخل هذا الكورس حالياً
+      </p>
+    `;
+    return;
+  }
+
+  sections.forEach(section => {
+    const wrapper = document.createElement("div");
+
+    wrapper.innerHTML = `
+      <div class="border border-slate-800 rounded-2xl p-4">
+        <h3 class="font-bold text-teal-400 mb-3">
+          ${section.title}
+        </h3>
+
+        <div class="space-y-2">
+          ${
+            section.lessons && section.lessons.length
+            ? section.lessons.map(lesson => `
+                <button onclick='openLesson(${JSON.stringify(lesson)})'
+                  class="w-full text-right bg-slate-950/70 hover:bg-teal-500/10 border border-slate-800 hover:border-teal-500 rounded-xl px-4 py-3 transition">
+                  <div class="font-bold">${lesson.title}</div>
+                  <div class="text-xs text-zinc-500">${lesson.lessonType}</div>
+                </button>
+              `).join("")
+            : `<p class="text-zinc-500 text-sm">لا يوجد دروس</p>`
+          }
+        </div>
+      </div>
+    `;
+
+    sectionsList.appendChild(wrapper);
+  });
+}
+
+async function openLesson(lesson) {
+  lessonTitle.innerText = lesson.title;
+  lessonDescription.innerText = lesson.description || "";
+
+  lessonContent.innerHTML = emptyBox("جاري تحميل الدرس...");
+
+  const res = await fetch(`${API_BASE}/api/lessons/${lesson.id}/watch`, {
+    headers: {
+      "Authorization": `Bearer ${token}`
+    }
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    lessonContent.innerHTML = emptyBox(data.detail || "لا يمكنك مشاهدة هذا الدرس");
+    return;
+  }
+
+  const secureLesson = data.lesson;
+
+  if (secureLesson.lessonType === "video") {
+    if (!secureLesson.videoUrl) {
+      lessonContent.innerHTML = emptyBox("لا يوجد رابط فيديو لهذا الدرس");
+      return;
+    }
+
+    lessonContent.innerHTML = `
+      <div class="aspect-video bg-black rounded-2xl overflow-hidden border border-slate-800">
+        <iframe
+          src="${secureLesson.videoUrl}"
+          class="w-full h-full"
+          allowfullscreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+        </iframe>
+      </div>
+    `;
+    return;
+  }
+
+  if (secureLesson.lessonType === "pdf") {
+    lessonContent.innerHTML = `
+      <iframe src="${secureLesson.pdfUrl}" class="w-full h-[600px] border border-slate-800 rounded-2xl"></iframe>
+    `;
+    return;
+  }
+
+  lessonContent.innerHTML = `
+    <div class="bg-slate-950/70 border border-slate-800 rounded-2xl p-5 leading-8 text-zinc-300 whitespace-pre-line">
+      ${secureLesson.contentText || "لا يوجد نص"}
+    </div>
+  `;
+}
+
+function emptyBox(text) {
+  return `
+    <div class="h-64 border border-slate-800 rounded-2xl flex items-center justify-center text-zinc-500">
+      ${text}
+    </div>
+  `;
+}
+
+loadCourseContent();
+</script>
+
+</body>
+</html>
