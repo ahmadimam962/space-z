@@ -19,7 +19,7 @@ All models inherit from Base (defined in app.database)
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime,ForeignKey, Index
 from app.database import Base
 
 
@@ -159,6 +159,8 @@ class UserDevice(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login_at = Column(DateTime, default=datetime.utcnow)
 
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
 
 # ==========================================
 # Course Management Models
@@ -268,6 +270,25 @@ class PurchaseRequest(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    __table_args__ = (
+        Index(
+            "uq_active_purchase_transfer_number",
+            "transfer_number",
+            unique=True,
+            postgresql_where=status.in_(["pending", "approved"])
+        ),
+        Index(
+            "uq_active_purchase_user_course",
+            "user_id",
+            "course_id",
+            unique=True,
+            postgresql_where=status.in_(["pending", "approved"])
+        ),
+    )
+
 
 class Enrollment(Base):
     """
@@ -293,6 +314,19 @@ class Enrollment(Base):
     
     status = Column(String(20), default="active")
     enrolled_at = Column(DateTime, default=datetime.utcnow)
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    __table_args__ = (
+       Index(
+           "uq_active_enrollment_user_course",
+           "user_id",
+           "course_id",
+            unique=True,
+           postgresql_where=(status == "active")
+        ),
+    )
 
 
 # ==========================================
@@ -328,6 +362,8 @@ class Notification(Base):
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
 class CourseSection(Base):
     __tablename__ = "course_sections"
 
@@ -338,6 +374,8 @@ class CourseSection(Base):
     sort_order = Column(Integer, default=1)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
 
 
 class CourseLesson(Base):
@@ -361,6 +399,8 @@ class CourseLesson(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+    section_id = Column(Integer, ForeignKey("course_sections.id", ondelete="CASCADE"), nullable=False, index=True)
 
 
 class Coupon(Base):
