@@ -427,3 +427,29 @@ class AuditLog(Base):
     target_id = Column(Integer, nullable=True)
     details = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+
+class LessonProgress(Base):
+    __tablename__ = "lesson_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+    lesson_id = Column(Integer, ForeignKey("course_lessons.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    is_completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime, nullable=True)
+    last_watched_at = Column(DateTime, default=datetime.utcnow)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index(
+            "uq_lesson_progress_user_lesson",
+            "user_id",
+            "lesson_id",
+            unique=True
+        ),
+    )

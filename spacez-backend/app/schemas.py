@@ -296,3 +296,8 @@ class CouponUpdateRequest(BaseModel):
 
 class PurchaseAdminNoteRequest(BaseModel):
     admin_note: str
+
+
+class MarkLessonProgressRequest(BaseModel):
+    lesson_id: int
+    is_completed: bool = True

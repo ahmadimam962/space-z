@@ -51,7 +51,7 @@ from app.notifications import router as notifications_router
 from app.enrollments import router as enrollments_router
 from app.course_content import router as course_content_router
 from app.audit import router as audit_router
-
+from app.progress import router as progress_router
 
 # ==========================================
 # FastAPI Application Initialization
@@ -149,7 +149,7 @@ app.include_router(notifications_router)
 app.include_router(enrollments_router)
 app.include_router(course_content_router)
 app.include_router(audit_router)
-
+app.include_router(progress_router)
 
 # ==========================================
 # Root / Health Check Endpoint
