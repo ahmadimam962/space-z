@@ -1,28 +1,38 @@
+"""
+Course Content Module
+This module handles course content management including:
+- Sections CRUD (admin only)
+- Lessons CRUD (admin only)
+- Viewing course content (students enrolled in the course)
+- Watching individual lessons (students enrolled in the course)
+"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
-    User,
-    Course,
-    CourseSection,
-    CourseLesson,
-    Enrollment
+    User, Course, CourseSection, CourseLesson, Enrollment
 )
 from app.schemas import (
-    SectionCreateRequest,
-    SectionUpdateRequest,
-    LessonCreateRequest,
-    LessonUpdateRequest
+    SectionCreateRequest, SectionUpdateRequest,
+    LessonCreateRequest, LessonUpdateRequest
 )
 from app.admin import get_current_admin
 from app.users import get_current_user
 
 
+# ==========================================
+# Router Initialization
+# ==========================================
 router = APIRouter(tags=["Course Content"])
 
 
-def lesson_to_dict(lesson: CourseLesson):
+# ==========================================
+# Helper Functions
+# ==========================================
+
+def lesson_to_dict(lesson: CourseLesson) -> dict:
+    """Convert a CourseLesson object to a dictionary for API responses."""
     return {
         "id": lesson.id,
         "courseId": lesson.course_id,
@@ -37,7 +47,8 @@ def lesson_to_dict(lesson: CourseLesson):
     }
 
 
-def section_to_dict(section: CourseSection, db: Session, include_lessons=True):
+def section_to_dict(section: CourseSection, db: Session, include_lessons: bool = True) -> dict:
+    """Convert a CourseSection object to a dictionary, optionally including its lessons."""
     data = {
         "id": section.id,
         "courseId": section.course_id,
@@ -53,44 +64,37 @@ def section_to_dict(section: CourseSection, db: Session, include_lessons=True):
             CourseLesson.sort_order.asc(),
             CourseLesson.id.asc()
         ).all()
-
-        data["lessons"] = [
-            lesson_to_dict(lesson)
-            for lesson in lessons
-        ]
+        data["lessons"] = [lesson_to_dict(lesson) for lesson in lessons]
 
     return data
 
 
-def ensure_course_exists(course_id: int, db: Session):
-    course = db.query(Course).filter(
-        Course.id == course_id
-    ).first()
-
+def ensure_course_exists(course_id: int, db: Session) -> Course:
+    """Verify that a course exists, otherwise raise 404."""
+    course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
-        raise HTTPException(
-            status_code=404,
-            detail="Course not found"
-        )
-
+        raise HTTPException(status_code=404, detail="Course not found")
     return course
 
 
-def ensure_student_has_course(course_id: int, user_id: int, db: Session):
+def ensure_student_has_course(course_id: int, user_id: int, db: Session) -> Enrollment:
+    """Verify that the student is enrolled in the course, otherwise raise 403."""
     enrollment = db.query(Enrollment).filter(
         Enrollment.course_id == course_id,
         Enrollment.user_id == user_id,
         Enrollment.status == "active"
     ).first()
-
     if not enrollment:
         raise HTTPException(
             status_code=403,
             detail="You do not have access to this course"
         )
-
     return enrollment
 
+
+# ==========================================
+# Admin Endpoints - Sections
+# ==========================================
 
 @router.get("/api/admin/courses/{course_id}/sections")
 def admin_list_sections(
@@ -98,6 +102,7 @@ def admin_list_sections(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
+    """List all sections of a course (admin)."""
     ensure_course_exists(course_id, db)
 
     sections = db.query(CourseSection).filter(
@@ -109,10 +114,7 @@ def admin_list_sections(
 
     return {
         "success": True,
-        "data": [
-            section_to_dict(section, db)
-            for section in sections
-        ]
+        "data": [section_to_dict(section, db) for section in sections]
     }
 
 
@@ -123,6 +125,7 @@ def admin_create_section(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
+    """Create a new section in a course (admin)."""
     ensure_course_exists(course_id, db)
 
     section = CourseSection(
@@ -149,15 +152,10 @@ def admin_update_section(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    section = db.query(CourseSection).filter(
-        CourseSection.id == section_id
-    ).first()
-
+    """Update an existing section (partial update supported)."""
+    section = db.query(CourseSection).filter(CourseSection.id == section_id).first()
     if not section:
-        raise HTTPException(
-            status_code=404,
-            detail="Section not found"
-        )
+        raise HTTPException(status_code=404, detail="Section not found")
 
     if request.title is not None:
         section.title = request.title
@@ -181,16 +179,12 @@ def admin_delete_section(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    section = db.query(CourseSection).filter(
-        CourseSection.id == section_id
-    ).first()
-
+    """Delete a section and all its lessons (admin)."""
+    section = db.query(CourseSection).filter(CourseSection.id == section_id).first()
     if not section:
-        raise HTTPException(
-            status_code=404,
-            detail="Section not found"
-        )
+        raise HTTPException(status_code=404, detail="Section not found")
 
+    # Delete all lessons within this section first
     db.query(CourseLesson).filter(
         CourseLesson.section_id == section.id
     ).delete()
@@ -204,6 +198,10 @@ def admin_delete_section(
     }
 
 
+# ==========================================
+# Admin Endpoints - Lessons
+# ==========================================
+
 @router.post("/api/admin/sections/{section_id}/lessons")
 def admin_create_lesson(
     section_id: int,
@@ -211,21 +209,13 @@ def admin_create_lesson(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    section = db.query(CourseSection).filter(
-        CourseSection.id == section_id
-    ).first()
-
+    """Create a new lesson in a section (admin)."""
+    section = db.query(CourseSection).filter(CourseSection.id == section_id).first()
     if not section:
-        raise HTTPException(
-            status_code=404,
-            detail="Section not found"
-        )
+        raise HTTPException(status_code=404, detail="Section not found")
 
     if request.lesson_type not in ["video", "pdf", "text"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid lesson type"
-        )
+        raise HTTPException(status_code=400, detail="Invalid lesson type")
 
     lesson = CourseLesson(
         course_id=section.course_id,
@@ -259,22 +249,14 @@ def admin_update_lesson(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    lesson = db.query(CourseLesson).filter(
-        CourseLesson.id == lesson_id
-    ).first()
-
+    """Update an existing lesson (partial update supported)."""
+    lesson = db.query(CourseLesson).filter(CourseLesson.id == lesson_id).first()
     if not lesson:
-        raise HTTPException(
-            status_code=404,
-            detail="Lesson not found"
-        )
+        raise HTTPException(status_code=404, detail="Lesson not found")
 
     if request.lesson_type is not None:
         if request.lesson_type not in ["video", "pdf", "text"]:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid lesson type"
-            )
+            raise HTTPException(status_code=400, detail="Invalid lesson type")
         lesson.lesson_type = request.lesson_type
 
     if request.title is not None:
@@ -317,15 +299,10 @@ def admin_delete_lesson(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    lesson = db.query(CourseLesson).filter(
-        CourseLesson.id == lesson_id
-    ).first()
-
+    """Delete a lesson permanently (admin)."""
+    lesson = db.query(CourseLesson).filter(CourseLesson.id == lesson_id).first()
     if not lesson:
-        raise HTTPException(
-            status_code=404,
-            detail="Lesson not found"
-        )
+        raise HTTPException(status_code=404, detail="Lesson not found")
 
     db.delete(lesson)
     db.commit()
@@ -336,19 +313,19 @@ def admin_delete_lesson(
     }
 
 
+# ==========================================
+# Student Endpoints
+# ==========================================
+
 @router.get("/api/courses/{course_id}/content")
 def student_course_content(
     course_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """Fetch the full content (sections + lessons) of a course for an enrolled student."""
     course = ensure_course_exists(course_id, db)
-
-    ensure_student_has_course(
-        course_id,
-        current_user.id,
-        db
-    )
+    ensure_student_has_course(course_id, current_user.id, db)
 
     sections = db.query(CourseSection).filter(
         CourseSection.course_id == course_id
@@ -365,10 +342,7 @@ def student_course_content(
             "description": course.description,
             "thumbnailUrl": course.thumbnail_url
         },
-        "sections": [
-            section_to_dict(section, db)
-            for section in sections
-        ]
+        "sections": [section_to_dict(section, db) for section in sections]
     }
 
 
@@ -378,21 +352,12 @@ def watch_lesson(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    lesson = db.query(CourseLesson).filter(
-        CourseLesson.id == lesson_id
-    ).first()
-
+    """Fetch the full content of a single lesson for an enrolled student."""
+    lesson = db.query(CourseLesson).filter(CourseLesson.id == lesson_id).first()
     if not lesson:
-        raise HTTPException(
-            status_code=404,
-            detail="Lesson not found"
-        )
+        raise HTTPException(status_code=404, detail="Lesson not found")
 
-    ensure_student_has_course(
-        lesson.course_id,
-        current_user.id,
-        db
-    )
+    ensure_student_has_course(lesson.course_id, current_user.id, db)
 
     return {
         "success": True,

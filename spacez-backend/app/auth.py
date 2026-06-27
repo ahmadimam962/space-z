@@ -1,31 +1,29 @@
 """
 Authentication Module
----------------------
-This module handles all authentication-related operations including:
+هذا الموديول يعالج كافة عمليات المصادقة بما في ذلك:
 
-1. Registration Flow:
-   - Register new users with email verification (OTP)
-   - Resend OTP codes
-   - Verify OTP and activate account
+تدفق التسجيل:
+- تسجيل مستخدمين جدد مع التحقق من البريد (OTP)
+- إعادة إرسال رموز OTP
+- التحقق من OTP وتفعيل الحساب
 
-2. Login Flow:
-   - Local login (email/phone + password)
-   - Google OAuth login
-   - Device management (max 2 devices per user)
+تدفق تسجيل الدخول:
+- تسجيل الدخول المحلي (بريد/هاتف + كلمة مرور)
+- تسجيل الدخول عبر Google OAuth
+- إدارة الأجهزة (حد أقصى جهازين لكل مستخدم)
 
-3. Password Reset Flow:
-   - Forgot password (send reset OTP)
-   - Reset password with OTP verification
+تدفق إعادة تعيين كلمة المرور:
+- نسيت كلمة المرور (إرسال OTP لإعادة التعيين)
+- إعادة تعيين كلمة المرور مع التحقق من OTP
 
-Security Features:
-- OTP rate limiting (5 requests per 15 minutes)
-- OTP cooldown (40 seconds between requests)
-- OTP expiration (10 minutes)
-- Device limit enforcement (max 2 devices)
-- Password hashing with bcrypt
-- JWT token-based authentication
+مميزات الأمان:
+- Rate limiting لـ OTP (5 طلبات كل 15 دقيقة)
+- Cooldown لـ OTP (40 ثانية بين الطلبات)
+- انتهاء صلاحية OTP (10 دقائق)
+- فرض حد الأجهزة (حد أقصى 2)
+- تشفير كلمات المرور باستخدام bcrypt
+- مصادقة مبنية على JWT tokens
 """
-
 from datetime import datetime, timedelta
 from typing import Dict, Any
 import secrets
@@ -35,39 +33,26 @@ from sqlalchemy.orm import Session
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
-# Local application imports
+# Local imports
 from app.config import settings
 from app.database import get_db
-from app.models import (
-    User,
-    OTPCode,
-    PendingRegistration,
-    UserDevice
-)
+from app.models import User, OTPCode, PendingRegistration, UserDevice
 from app.schemas import (
-    RegisterRequest,
-    VerifyOTPRequest,
-    LoginRequest,
-    ResendOTPRequest,
-    GoogleLoginRequest,
-    ForgotPasswordRequest,
-    ResetPasswordRequest,
-    LogoutRequest
+    RegisterRequest, VerifyOTPRequest, LoginRequest,
+    ResendOTPRequest, GoogleLoginRequest,
+    ForgotPasswordRequest, ResetPasswordRequest, LogoutRequest
 )
 from app.security import (
-    hash_password,
-    verify_password,
-    create_access_token,
-    hash_otp,
-    verify_otp_code
+    hash_password, verify_password, create_access_token,
+    hash_otp, verify_otp_code
 )
 from app.email_service import send_otp_email
 from app.users import get_current_user
 
+
 # ==========================================
 # Router Initialization
 # ==========================================
-
 router = APIRouter(
     prefix="/api/auth",
     tags=["Authentication"]
@@ -77,7 +62,6 @@ router = APIRouter(
 # ==========================================
 # Constants
 # ==========================================
-
 OTP_COOLDOWN_SECONDS = 40
 OTP_RATE_LIMIT_COUNT = 5
 OTP_RATE_LIMIT_MINUTES = 15
@@ -91,47 +75,39 @@ PASSWORD_RESET_PURPOSE = "password_reset"
 
 def can_send_otp(email: str, db: Session) -> None:
     """
-    Check if an OTP can be sent to the given email address.
-    
-    Enforces two rate limiting rules:
-    1. Cooldown: Must wait at least OTP_COOLDOWN_SECONDS since last OTP
-    2. Rate limit: Maximum OTP_RATE_LIMIT_COUNT requests per OTP_RATE_LIMIT_MINUTES
-    
-    Args:
-        email (str): The email address to check.
-        db (Session): The database session.
-        
-    Raises:
-        HTTPException: 429 if rate limit is exceeded.
+    التحقق من إمكانية إرسال OTP للبريد المعطى.
+    يفرض قاعدتين لتحديد المعدل:
+    1. Cooldown: يجب الانتظار على الأقل OTP_COOLDOWN_SECONDS منذ آخر OTP
+    2. Rate limit: حد أقصى OTP_RATE_LIMIT_COUNT طلبات كل OTP_RATE_LIMIT_MINUTES
     """
     now = datetime.utcnow()
-    
-    # 1. Check cooldown period
+
+    # 1. التحقق من فترة الـ cooldown
     last_otp = db.query(OTPCode).filter(
         OTPCode.email == email,
         OTPCode.purpose == "register"
     ).order_by(
         OTPCode.created_at.desc()
     ).first()
-    
+
     if last_otp:
         seconds_since_last = (now - last_otp.created_at).total_seconds()
-        
+
         if seconds_since_last < OTP_COOLDOWN_SECONDS:
             raise HTTPException(
                 status_code=429,
                 detail=f"Please wait {int(OTP_COOLDOWN_SECONDS - seconds_since_last)} seconds before requesting another OTP"
             )
-    
-    # 2. Check rate limit window
+
+    # 2. التحقق من نافذة rate limit
     window_start = now - timedelta(minutes=OTP_RATE_LIMIT_MINUTES)
-    
+
     otp_count = db.query(OTPCode).filter(
         OTPCode.email == email,
         OTPCode.purpose == "register",
         OTPCode.created_at >= window_start
     ).count()
-    
+
     if otp_count >= OTP_RATE_LIMIT_COUNT:
         raise HTTPException(
             status_code=429,
@@ -141,19 +117,14 @@ def can_send_otp(email: str, db: Session) -> None:
 
 def create_and_send_otp(email: str, db: Session) -> None:
     """
-    Create a new OTP code, save it to the database, and send it via email.
-    
-    This function:
-    1. Marks all existing unused OTPs for this email as used (invalidates them)
-    2. Generates a new 6-digit OTP code
-    3. Hashes and saves the OTP to the database
-    4. Sends the plain text OTP to the user's email
-    
-    Args:
-        email (str): The email address to send the OTP to.
-        db (Session): The database session.
+    إنشاء رمز OTP جديد، حفظه في قاعدة البيانات، وإرساله عبر البريد.
+    تقوم هذه الدالة بـ:
+    1. تعليم كل OTPs غير المستخدمة الموجودة لهذا البريد كمستخدمة (إبطالها)
+    2. توليد رمز OTP جديد من 6 أرقام
+    3. تشفير وحفظ OTP في قاعدة البيانات
+    4. إرسال OTP النصي إلى بريد المستخدم
     """
-    # 1. Invalidate any existing unused OTPs for this email
+    # 1. إبطال أي OTPs غير مستخدمة موجودة لهذا البريد
     db.query(OTPCode).filter(
         OTPCode.email == email,
         OTPCode.purpose == "register",
@@ -161,67 +132,56 @@ def create_and_send_otp(email: str, db: Session) -> None:
     ).update({
         OTPCode.is_used: True
     })
-    
-    # 2. Generate a new 6-digit OTP (100000-999999)
+
+    # 2. توليد OTP جديد من 6 أرقام (100000-999999)
     otp_code = str(secrets.randbelow(900000) + 100000)
-    
-    # 3. Create and save the hashed OTP
+
+    # 3. إنشاء وحفظ OTP المشفر
     otp = OTPCode(
         email=email,
         code=hash_otp(otp_code),
         purpose="register",
         expires_at=datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)
     )
-    
+
     db.add(otp)
     db.commit()
-    
-    # 4. Send the plain text OTP via email
+
+    # 4. إرسال OTP النصي عبر البريد
     send_otp_email(email, otp_code)
 
 
 def register_device_or_fail(user_id: int, device_id: str, db: Session) -> None:
     """
-    Register a device for a user or fail if device limit is reached.
-    
-    Each user can have a maximum of 2 registered devices. If the limit is reached,
-    the function raises an HTTP 403 error.
-    
-    Args:
-        user_id (int): The ID of the user.
-        device_id (str): The unique identifier for the device.
-        db (Session): The database session.
-        
-    Raises:
-        HTTPException: 403 if the device limit (2) is reached.
+    تسجيل جهاز للمستخدم أو الفشل إذا تم الوصول إلى حد الأجهزة.
+    كل مستخدم يمكنه الحصول على حد أقصى 2 أجهزة مسجلة.
     """
-    # Check if device is already registered
     existing_device = db.query(UserDevice).filter(
         UserDevice.user_id == user_id,
         UserDevice.device_id == device_id
     ).first()
-    
+
     if existing_device:
-        # Update last login timestamp
+        # تحديث وقت آخر تسجيل دخول
         existing_device.last_login_at = datetime.utcnow()
     else:
-        # Check device limit
+        # التحقق من حد الأجهزة
         device_count = db.query(UserDevice).filter(
             UserDevice.user_id == user_id
         ).count()
-        
+
         if device_count >= 2:
             raise HTTPException(
                 status_code=403,
                 detail="Device limit reached. This account can only be used on 2 devices."
             )
-        
-        # Register new device
+
+        # تسجيل جهاز جديد
         db.add(UserDevice(
             user_id=user_id,
             device_id=device_id
         ))
-    
+
     db.commit()
 
 
@@ -235,57 +195,45 @@ def register(
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Register a new user account.
-    
-    Flow:
-    1. Validate email and phone number are not already registered
-    2. Check OTP rate limits
-    3. Clear any existing pending registration for this email
-    4. Create a pending registration with hashed password
-    5. Generate and send OTP to the user's email
-    
-    Args:
-        request (RegisterRequest): The registration data.
-        db (Session): The database session.
-        
-    Returns:
-        dict: Success message indicating OTP was sent.
-        
-    Raises:
-        HTTPException: 400 if email or phone already exists.
-        HTTPException: 429 if OTP rate limit is exceeded.
+    تسجيل حساب مستخدم جديد.
+    التدفق:
+    1. التحقق من أن البريد ورقم الهاتف غير مسجلين مسبقاً
+    2. التحقق من حدود معدل OTP
+    3. مسح أي تسجيل معلق موجود لهذا البريد
+    4. إنشاء تسجيل معلق مع كلمة مرور مشفرة
+    5. توليد وإرسال OTP إلى بريد المستخدم
     """
-    # 1. Check if email already exists
+    # 1. التحقق من وجود البريد
     existing_user = db.query(User).filter(
         User.email == request.email
     ).first()
-    
+
     if existing_user:
         raise HTTPException(
             status_code=400,
             detail="Email already exists"
         )
-    
-    # 2. Check if phone number already exists
+
+    # 2. التحقق من وجود رقم الهاتف
     existing_phone = db.query(User).filter(
         User.phone_number == request.phone_number
     ).first()
-    
+
     if existing_phone:
         raise HTTPException(
             status_code=400,
             detail="Phone already exists"
         )
-    
-    # 3. Check OTP rate limits
+
+    # 3. التحقق من حدود معدل OTP
     can_send_otp(request.email, db)
-    
-    # 4. Clear any existing pending registration for this email
+
+    # 4. مسح أي تسجيل معلق موجود لهذا البريد
     db.query(PendingRegistration).filter(
         PendingRegistration.email == request.email
     ).delete()
-    
-    # 5. Create pending registration
+
+    # 5. إنشاء التسجيل المعلق
     pending = PendingRegistration(
         first_name=request.first_name,
         last_name=request.last_name,
@@ -293,13 +241,13 @@ def register(
         phone_number=request.phone_number,
         password_hash=hash_password(request.password)
     )
-    
+
     db.add(pending)
     db.commit()
-    
-    # 6. Generate and send OTP
+
+    # 6. توليد وإرسال OTP
     create_and_send_otp(request.email, db)
-    
+
     return {
         "success": True,
         "message": "OTP sent successfully"
@@ -311,37 +259,20 @@ def resend_otp(
     request: ResendOTPRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    Resend OTP to a user who is in the registration process.
-    
-    Args:
-        request (ResendOTPRequest): The email address to resend OTP to.
-        db (Session): The database session.
-        
-    Returns:
-        dict: Success message indicating OTP was resent.
-        
-    Raises:
-        HTTPException: 404 if no pending registration found for this email.
-        HTTPException: 429 if OTP rate limit is exceeded.
-    """
-    # Check if pending registration exists
+    """إعادة إرسال OTP لمستخدم في عملية التسجيل."""
     pending = db.query(PendingRegistration).filter(
         PendingRegistration.email == request.email
     ).first()
-    
+
     if not pending:
         raise HTTPException(
             status_code=404,
             detail="Pending registration not found"
         )
-    
-    # Check OTP rate limits
+
     can_send_otp(request.email, db)
-    
-    # Generate and send new OTP
     create_and_send_otp(request.email, db)
-    
+
     return {
         "success": True,
         "message": "OTP resent successfully"
@@ -354,28 +285,16 @@ def verify_otp(
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Verify OTP and activate the user account.
-    
-    Flow:
-    1. Find all unused OTPs for this email
-    2. Verify the OTP code against each (supports multiple attempts)
-    3. Check if OTP has expired
-    4. Fetch the pending registration
-    5. Create the user account
-    6. Mark OTP as used and delete pending registration
-    
-    Args:
-        request (VerifyOTPRequest): The email and OTP code to verify.
-        db (Session): The database session.
-        
-    Returns:
-        dict: Success message and user data.
-        
-    Raises:
-        HTTPException: 400 if OTP is invalid or expired.
-        HTTPException: 404 if no pending registration found.
+    التحقق من OTP وتفعيل حساب المستخدم.
+    التدفق:
+    1. إيجاد كل OTPs غير المستخدمة لهذا البريد
+    2. التحقق من رمز OTP مقابل كل منها
+    3. التحقق من انتهاء صلاحية OTP
+    4. جلب التسجيل المعلق
+    5. إنشاء حساب المستخدم
+    6. تعليم OTP كمستخدمة وحذف التسجيل المعلق
     """
-    # 1. Fetch all unused OTPs for this email
+    # 1. جلب كل OTPs غير المستخدمة لهذا البريد
     otp_records = db.query(OTPCode).filter(
         OTPCode.email == request.email,
         OTPCode.purpose == "register",
@@ -383,51 +302,45 @@ def verify_otp(
     ).order_by(
         OTPCode.created_at.desc()
     ).all()
-    
-    # 2. Verify OTP code
+
+    # 2. التحقق من رمز OTP
     otp_record = None
-    
+
     for record in otp_records:
         if verify_otp_code(request.otp, record.code):
             otp_record = record
             break
-    
+
     if not otp_record:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid OTP"
-        )
-    
-    # 3. Check if OTP has expired
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    # 3. التحقق من انتهاء صلاحية OTP
     if otp_record.expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=400,
-            detail="OTP expired"
-        )
-    
-    # 4. Fetch pending registration
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    # 4. جلب التسجيل المعلق
     pending = db.query(PendingRegistration).filter(
         PendingRegistration.email == request.email
     ).first()
-    
+
     if not pending:
         raise HTTPException(
             status_code=404,
             detail="Pending registration not found"
         )
-    
-    # 5. Double-check email doesn't exist (race condition protection)
+
+    # 5. تحقق مزدوج من عدم وجود البريد (حماية من race condition)
     existing_user = db.query(User).filter(
         User.email == pending.email
     ).first()
-    
+
     if existing_user:
         raise HTTPException(
             status_code=400,
             detail="Email already exists"
         )
-    
-    # 6. Create the user account
+
+    # 6. إنشاء حساب المستخدم
     user = User(
         first_name=pending.first_name,
         last_name=pending.last_name,
@@ -439,18 +352,18 @@ def verify_otp(
         is_email_verified=True,
         is_banned=False
     )
-    
+
     db.add(user)
-    
-    # 7. Mark OTP as used
+
+    # 7. تعليم OTP كمستخدمة
     otp_record.is_used = True
-    
-    # 8. Delete pending registration
+
+    # 8. حذف التسجيل المعلق
     db.delete(pending)
-    
+
     db.commit()
     db.refresh(user)
-    
+
     return {
         "success": True,
         "message": "Account verified successfully",
@@ -475,75 +388,61 @@ def login(
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Authenticate a user with email/phone and password.
-    
-    Flow:
-    1. Find user by email or phone number
-    2. Validate user account (local auth, email verified, not banned)
-    3. Verify password
-    4. Register or update device
-    5. Generate and return JWT token
-    
-    Args:
-        request (LoginRequest): The login credentials and device ID.
-        db (Session): The database session.
-        
-    Returns:
-        dict: Success message, JWT token, and user data.
-        
-    Raises:
-        HTTPException: 401 if credentials are invalid.
-        HTTPException: 400 if account uses Google login.
-        HTTPException: 403 if email not verified or account banned.
-        HTTPException: 403 if device limit reached.
+    مصادقة مستخدم بالبريد/الهاتف وكلمة المرور.
+    التدفق:
+    1. إيجاد المستخدم بالبريد أو رقم الهاتف
+    2. التحقق من صحة الحساب (local auth, بريد موثق، غير محظور)
+    3. التحقق من كلمة المرور
+    4. تسجيل أو تحديث الجهاز
+    5. توليد وإرجاع JWT token
     """
-    # 1. Find user by email or phone
+    # 1. إيجاد المستخدم بالبريد أو الهاتف
     user = db.query(User).filter(
         (User.email == request.identifier) |
         (User.phone_number == request.identifier)
     ).first()
-    
+
     if not user:
         raise HTTPException(
             status_code=401,
             detail="Invalid credentials"
         )
-    
-    # 2. Validate account type and status
+
+    # 2. التحقق من نوع الحساب وحالته
     if user.auth_provider != "local":
         raise HTTPException(
             status_code=400,
             detail="Please login with Google"
         )
-    
+
     if not user.is_email_verified:
         raise HTTPException(
             status_code=403,
             detail="Email not verified"
         )
-    
+
     if user.is_banned:
         raise HTTPException(
             status_code=403,
             detail="Account is banned"
         )
-    
-    # 3. Verify password
+
+    # 3. التحقق من كلمة المرور
     if not verify_password(request.password, user.password_hash):
         raise HTTPException(
             status_code=401,
             detail="Invalid credentials"
         )
-    
-    # 4. Register or update device
+
+    # 4. تسجيل أو تحديث الجهاز
     register_device_or_fail(user.id, request.deviceId, db)
-    
-    # 5. Generate JWT token
+
+    # 5. توليد JWT token
     token = create_access_token({
         "sub": str(user.id),
         "role": user.role
     })
-    
+
     return {
         "success": True,
         "message": "Login successful",
@@ -565,28 +464,15 @@ def google_login(
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Authenticate a user with Google OAuth.
-    
-    Flow:
-    1. Verify Google ID token
-    2. Extract user info from token payload
-    3. Find or create user account
-    4. Register or update device
-    5. Generate and return JWT token
-    
-    Args:
-        request (GoogleLoginRequest): The Google ID token and device ID.
-        db (Session): The database session.
-        
-    Returns:
-        dict: Success message, JWT token, phone requirement flag, and user data.
-        
-    Raises:
-        HTTPException: 401 if Google token is invalid.
-        HTTPException: 400 if Google account has no email.
-        HTTPException: 403 if account is banned or device limit reached.
+    مصادقة مستخدم عبر Google OAuth.
+    التدفق:
+    1. التحقق من Google ID token
+    2. استخراج معلومات المستخدم من payload
+    3. إيجاد أو إنشاء حساب المستخدم
+    4. تسجيل أو تحديث الجهاز
+    5. توليد وإرجاع JWT token
     """
-    # 1. Verify Google ID token
+    # 1. التحقق من Google ID token
     try:
         payload = id_token.verify_oauth2_token(
             request.idToken,
@@ -598,23 +484,21 @@ def google_login(
             status_code=401,
             detail="Invalid Google token"
         )
-    
-    # 2. Extract user info
+
+    # 2. استخراج معلومات المستخدم
     email = payload.get("email")
     first_name = payload.get("given_name") or "Google"
     last_name = payload.get("family_name") or "User"
-    
+
     if not email:
         raise HTTPException(
             status_code=400,
             detail="Google account has no email"
         )
-    
-    # 3. Find or create user
-    user = db.query(User).filter(
-        User.email == email
-    ).first()
-    
+
+    # 3. إيجاد أو إنشاء المستخدم
+    user = db.query(User).filter(User.email == email).first()
+
     if not user:
         user = User(
             first_name=first_name,
@@ -627,27 +511,27 @@ def google_login(
             is_email_verified=True,
             is_banned=False
         )
-        
+
         db.add(user)
         db.commit()
         db.refresh(user)
-    
-    # 4. Validate account status
+
+    # 4. التحقق من حالة الحساب
     if user.is_banned:
         raise HTTPException(
             status_code=403,
             detail="Account is banned"
         )
-    
-    # 5. Register or update device
+
+    # 5. تسجيل أو تحديث الجهاز
     register_device_or_fail(user.id, request.deviceId, db)
-    
-    # 6. Generate JWT token
+
+    # 6. توليد JWT token
     token = create_access_token({
         "sub": str(user.id),
         "role": user.role
     })
-    
+
     return {
         "success": True,
         "message": "Google login successful",
@@ -674,58 +558,39 @@ def forgot_password(
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Initiate password reset flow by sending a reset OTP.
-    
-    Flow:
-    1. Find user by email
-    2. Validate account uses local authentication
-    3. Check OTP rate limits
-    4. Invalidate existing unused reset OTPs
-    5. Generate and send new reset OTP
-    
-    Note: For security, this endpoint returns success even if email doesn't exist
-    to prevent email enumeration attacks.
-    
-    Args:
-        request (ForgotPasswordRequest): The email address to send reset code to.
-        db (Session): The database session.
-        
-    Returns:
-        dict: Success message (always returns success for security).
-        
-    Raises:
-        HTTPException: 400 if account uses Google login.
-        HTTPException: 429 if OTP rate limit is exceeded.
+    بدء تدفق إعادة تعيين كلمة المرور بإرسال OTP.
+    ملاحظة: للأمان، هذا الـ endpoint يُرجع success حتى لو البريد غير موجود
+    لمنع هجمات enumeration.
     """
-    # 1. Find user
+    # 1. إيجاد المستخدم
     user = db.query(User).filter(
         User.email == request.email
     ).first()
-    
+
     if not user:
-        # Return success even if email doesn't exist (security)
+        # إرجاع success حتى لو البريد غير موجود (للأمان)
         return {
             "success": True,
             "message": "If this email exists, a reset code has been sent"
         }
-    
-    # 2. Validate account type
+
+    # 2. التحقق من نوع الحساب
     if user.auth_provider != "local":
         raise HTTPException(
             status_code=400,
             detail="This account uses Google login"
         )
-    
-    # 3. Check OTP rate limits (with cooldown)
+
+    # 3. التحقق من حدود معدل OTP (مع cooldown)
     now = datetime.utcnow()
-    
+
     last_otp = db.query(OTPCode).filter(
         OTPCode.email == request.email,
         OTPCode.purpose == PASSWORD_RESET_PURPOSE
     ).order_by(
         OTPCode.created_at.desc()
     ).first()
-    
+
     if last_otp:
         seconds_since_last = (now - last_otp.created_at).total_seconds()
         if seconds_since_last < OTP_COOLDOWN_SECONDS:
@@ -733,8 +598,8 @@ def forgot_password(
                 status_code=429,
                 detail=f"Please wait {int(OTP_COOLDOWN_SECONDS - seconds_since_last)} seconds before requesting another code"
             )
-    
-    # 4. Invalidate existing unused reset OTPs
+
+    # 4. إبطال OTPs غير المستخدمة الموجودة
     db.query(OTPCode).filter(
         OTPCode.email == request.email,
         OTPCode.purpose == PASSWORD_RESET_PURPOSE,
@@ -742,22 +607,22 @@ def forgot_password(
     ).update({
         OTPCode.is_used: True
     })
-    
-    # 5. Generate and send new reset OTP
+
+    # 5. توليد وإرسال OTP جديد
     otp_code = str(secrets.randbelow(900000) + 100000)
-    
+
     otp = OTPCode(
         email=request.email,
         code=hash_otp(otp_code),
         purpose=PASSWORD_RESET_PURPOSE,
         expires_at=datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)
     )
-    
+
     db.add(otp)
     db.commit()
-    
+
     send_otp_email(request.email, otp_code)
-    
+
     return {
         "success": True,
         "message": "Password reset code sent"
@@ -770,46 +635,34 @@ def reset_password(
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Reset user's password using OTP verification.
-    
-    Flow:
-    1. Find user by email
-    2. Validate account uses local authentication
-    3. Find all unused reset OTPs for this email
-    4. Verify the OTP code
-    5. Check if OTP has expired
-    6. Update password and mark OTP as used
-    
-    Args:
-        request (ResetPasswordRequest): The email, OTP, and new password.
-        db (Session): The database session.
-        
-    Returns:
-        dict: Success message.
-        
-    Raises:
-        HTTPException: 400 if reset request is invalid or account uses Google login.
-        HTTPException: 400 if OTP is invalid or expired.
+    إعادة تعيين كلمة مرور المستخدم باستخدام التحقق من OTP.
+    التدفق:
+    1. إيجاد المستخدم بالبريد
+    2. التحقق من أن الحساب يستخدم مصادقة محلية
+    3. إيجاد كل OTPs غير المستخدمة لإعادة التعيين
+    4. التحقق من رمز OTP
+    5. التحقق من انتهاء الصلاحية
+    6. تحديث كلمة المرور وتعليم OTP كمستخدمة
     """
-    # 1. Find user
+    # 1. إيجاد المستخدم
     user = db.query(User).filter(
         User.email == request.email
     ).first()
-    
+
     if not user:
         raise HTTPException(
             status_code=400,
             detail="Invalid reset request"
         )
-    
-    # 2. Validate account type
+
+    # 2. التحقق من نوع الحساب
     if user.auth_provider != "local":
         raise HTTPException(
             status_code=400,
             detail="This account uses Google login"
         )
-    
-    # 3. Fetch all unused reset OTPs
+
+    # 3. جلب كل OTPs غير المستخدمة لإعادة التعيين
     otp_records = db.query(OTPCode).filter(
         OTPCode.email == request.email,
         OTPCode.purpose == PASSWORD_RESET_PURPOSE,
@@ -817,41 +670,36 @@ def reset_password(
     ).order_by(
         OTPCode.created_at.desc()
     ).all()
-    
-    # 4. Verify OTP code
+
+    # 4. التحقق من رمز OTP
     otp_record = None
-    
+
     for record in otp_records:
         if verify_otp_code(request.otp, record.code):
             otp_record = record
             break
-    
+
     if not otp_record:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid OTP"
-        )
-    
-    # 5. Check if OTP has expired
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    # 5. التحقق من انتهاء صلاحية OTP
     if otp_record.expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=400,
-            detail="OTP expired"
-        )
-    
-    # 6. Update password and mark OTP as used
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    # 6. تحديث كلمة المرور وتعليم OTP كمستخدمة
     user.password_hash = hash_password(request.new_password)
     otp_record.is_used = True
-    
+
     db.commit()
-    
+
     return {
         "success": True,
         "message": "Password reset successfully"
     }
 
+
 # ==========================================
-# logout Reset Endpoints
+# Logout Endpoint
 # ==========================================
 
 @router.post("/logout")
@@ -860,6 +708,7 @@ def logout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """تسجيل خروج المستخدم من جهاز محدد."""
     device = db.query(UserDevice).filter(
         UserDevice.user_id == current_user.id,
         UserDevice.device_id == request.deviceId

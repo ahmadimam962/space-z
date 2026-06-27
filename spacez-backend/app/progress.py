@@ -1,24 +1,34 @@
+"""
+Progress Module
+هذا الموديول مسؤول عن إدارة وتتبع تقدم المستخدم في الدروس والكورسات:
+- وضع علامة "مكتمل" على الدروس
+- حساب نسبة التقدم في الكورسات الفردية
+- استعراض ملخص تقدم المستخدم في جميع الكورسات المسجل بها
+"""
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+# Local imports
 from app.database import get_db
-from app.models import (
-    User,
-    Course,
-    CourseLesson,
-    Enrollment,
-    LessonProgress
-)
+from app.models import User, Course, CourseLesson, Enrollment, LessonProgress
 from app.schemas import MarkLessonProgressRequest
 from app.users import get_current_user
 
 
+# ==========================================
+# Router Initialization
+# ==========================================
 router = APIRouter(tags=["Progress"])
 
 
+# ==========================================
+# Helper Functions
+# ==========================================
+
 def ensure_enrolled(user_id: int, course_id: int, db: Session):
+    """التحقق من أن المستخدم مسجل في الكورس قبل السماح بأي إجراء."""
     enrollment = db.query(Enrollment).filter(
         Enrollment.user_id == user_id,
         Enrollment.course_id == course_id,
@@ -30,9 +40,12 @@ def ensure_enrolled(user_id: int, course_id: int, db: Session):
             status_code=403,
             detail="You do not have access to this course"
         )
-
     return enrollment
 
+
+# ==========================================
+# Endpoints
+# ==========================================
 
 @router.post("/api/progress/lesson")
 def mark_lesson_progress(
@@ -40,15 +53,16 @@ def mark_lesson_progress(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    lesson = db.query(CourseLesson).filter(
-        CourseLesson.id == request.lesson_id
-    ).first()
-
+    """تحديث حالة تقدم درس معين (مكتمل / غير مكتمل)."""
+    # 1. التحقق من وجود الدرس
+    lesson = db.query(CourseLesson).filter(CourseLesson.id == request.lesson_id).first()
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
 
+    # 2. التحقق من صلاحية الوصول
     ensure_enrolled(current_user.id, lesson.course_id, db)
 
+    # 3. جلب أو إنشاء سجل التقدم
     progress = db.query(LessonProgress).filter(
         LessonProgress.user_id == current_user.id,
         LessonProgress.lesson_id == lesson.id
@@ -62,13 +76,10 @@ def mark_lesson_progress(
         )
         db.add(progress)
 
+    # 4. تحديث البيانات
     progress.is_completed = request.is_completed
     progress.last_watched_at = datetime.utcnow()
-
-    if request.is_completed:
-        progress.completed_at = datetime.utcnow()
-    else:
-        progress.completed_at = None
+    progress.completed_at = datetime.utcnow() if request.is_completed else None
 
     db.commit()
     db.refresh(progress)
@@ -92,15 +103,14 @@ def get_course_progress(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    course = db.query(Course).filter(
-        Course.id == course_id
-    ).first()
-
+    """استرجاع نسبة تقدم المستخدم في كورس محدد."""
+    # 1. التحقق من وجود الكورس والتسجيل
+    course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-
     ensure_enrolled(current_user.id, course_id, db)
 
+    # 2. حساب التقدم
     total_lessons = db.query(CourseLesson).filter(
         CourseLesson.course_id == course_id
     ).count()
@@ -114,14 +124,9 @@ def get_course_progress(
     last_progress = db.query(LessonProgress).filter(
         LessonProgress.user_id == current_user.id,
         LessonProgress.course_id == course_id
-    ).order_by(
-        LessonProgress.last_watched_at.desc()
-    ).first()
+    ).order_by(LessonProgress.last_watched_at.desc()).first()
 
-    percent = 0
-
-    if total_lessons > 0:
-        percent = round((completed_lessons / total_lessons) * 100)
+    percent = round((completed_lessons / total_lessons) * 100) if total_lessons > 0 else 0
 
     return {
         "success": True,
@@ -141,18 +146,15 @@ def get_my_progress(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """استرجاع ملخص تقدم المستخدم في جميع الكورسات التي يشترك بها."""
     enrollments = db.query(Enrollment).filter(
         Enrollment.user_id == current_user.id,
         Enrollment.status == "active"
     ).all()
 
     result = []
-
     for enrollment in enrollments:
-        course = db.query(Course).filter(
-            Course.id == enrollment.course_id
-        ).first()
-
+        course = db.query(Course).filter(Course.id == enrollment.course_id).first()
         if not course:
             continue
 
@@ -169,14 +171,9 @@ def get_my_progress(
         last_progress = db.query(LessonProgress).filter(
             LessonProgress.user_id == current_user.id,
             LessonProgress.course_id == course.id
-        ).order_by(
-            LessonProgress.last_watched_at.desc()
-        ).first()
+        ).order_by(LessonProgress.last_watched_at.desc()).first()
 
-        percent = 0
-
-        if total_lessons > 0:
-            percent = round((completed_lessons / total_lessons) * 100)
+        percent = round((completed_lessons / total_lessons) * 100) if total_lessons > 0 else 0
 
         result.append({
             "courseId": course.id,
@@ -188,7 +185,4 @@ def get_my_progress(
             "lastWatchedAt": last_progress.last_watched_at if last_progress else None
         })
 
-    return {
-        "success": True,
-        "data": result
-    }
+    return {"success": True, "data": result}

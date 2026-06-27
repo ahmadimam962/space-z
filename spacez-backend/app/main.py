@@ -1,20 +1,17 @@
 """
 FastAPI Application Entry Point
----------------------------------
-This is the main entry point for the Space Z backend application.
+نقطة الدخول الرئيسية لتطبيق Space Z Backend.
 
-Responsibilities:
-1. Initialize the FastAPI application with metadata
-2. Configure middleware (CORS)
-3. Create database tables on startup
-4. Register all API routers
-5. Set up background scheduler for periodic cleanup tasks
-6. Provide a root health-check endpoint
+المسؤوليات:
+- تهيئة تطبيق FastAPI مع البيانات الوصفية
+- إعداد Middleware (CORS)
+- إنشاء جداول قاعدة البيانات عند بدء التشغيل
+- تسجيل جميع الـ API Routers
+- إعداد جدولة المهام الخلفية للتنظيف الدوري
 
-Background Jobs:
-- Auth cleanup: Runs every 60 minutes to remove expired OTPs and stale registrations
+المهام الخلفية:
+- Auth cleanup: يعمل كل 60 دقيقة لحذف OTPs المنتهية والتسجيلات المعلقة
 """
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -22,25 +19,15 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from app.database import Base, engine, SessionLocal
 from app.cleanup import cleanup_expired_auth_data
 
-# Import all models to ensure they're registered with Base.metadata
-# (required for create_all to work properly)
+# استيراد جميع النماذج لتسجيلها في Base.metadata
 from app.models import (
-    User,
-    OTPCode,
-    PendingRegistration,
-    UserDevice,
-    Course,
-    PaymentSetting,
-    PurchaseRequest,
-    Enrollment,
-    Notification,
-    CourseSection,
-    CourseLesson,
-    Coupon,
-    AuditLog
+    User, OTPCode, PendingRegistration, UserDevice,
+    Course, PaymentSetting, PurchaseRequest, Enrollment,
+    Notification, CourseSection, CourseLesson,
+    Coupon, AuditLog, LessonProgress
 )
 
-# Import all API routers
+# استيراد جميع الـ Routers
 from app.auth import router as auth_router
 from app.users import router as users_router
 from app.admin import router as admin_router
@@ -53,14 +40,17 @@ from app.course_content import router as course_content_router
 from app.audit import router as audit_router
 from app.progress import router as progress_router
 
+
+# ==========================================
+# Database Initialization
+# ==========================================
+# إنشاء الجداول (في الإنتاج يُفضّل استخدام Alembic)
+Base.metadata.create_all(bind=engine)
+
+
 # ==========================================
 # FastAPI Application Initialization
 # ==========================================
-
-# Create all database tables (if they don't already exist)
-# Note: In production, prefer using Alembic migrations instead
-
-# Initialize the FastAPI application
 app = FastAPI(
     title="Space Z API",
     version="1.0.0",
@@ -71,13 +61,10 @@ app = FastAPI(
 # ==========================================
 # Middleware Configuration
 # ==========================================
-
-# Configure CORS (Cross-Origin Resource Sharing) middleware
-# WARNING: allow_origins=["*"] is for development only!
-# In production, restrict to specific frontend domains
+# تحذير: allow_origins=["*"] للـ development فقط
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Development only - restrict in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,17 +74,13 @@ app.add_middleware(
 # ==========================================
 # Background Scheduler Setup
 # ==========================================
-
-# Initialize APScheduler for running periodic background tasks
 scheduler = BackgroundScheduler()
 
 
 def scheduled_cleanup() -> None:
     """
-    Background job that cleans up expired authentication data.
-    
-    Creates its own database session (since it runs outside of request context),
-    performs the cleanup, and ensures the session is closed afterwards.
+    مهمة خلفية لتنظيف بيانات المصادقة المنتهية.
+    تنشئ Session خاص بها لأنها تعمل خارج سياق الطلب.
     """
     db = SessionLocal()
     try:
@@ -109,12 +92,7 @@ def scheduled_cleanup() -> None:
 
 @app.on_event("startup")
 def start_scheduler() -> None:
-    """
-    Start the background scheduler when the application starts.
-    
-    Registers the auth cleanup job to run every 60 minutes.
-    replace_existing=True prevents duplicate jobs if the app restarts.
-    """
+    """بدء جدولة المهام عند تشغيل التطبيق."""
     scheduler.add_job(
         scheduled_cleanup,
         "interval",
@@ -127,18 +105,13 @@ def start_scheduler() -> None:
 
 @app.on_event("shutdown")
 def shutdown_scheduler() -> None:
-    """
-    Gracefully shut down the background scheduler when the application stops.
-    """
+    """إيقاف الجدولة عند إيقاف التطبيق."""
     scheduler.shutdown()
 
 
 # ==========================================
 # Router Registration
 # ==========================================
-
-# Register all API routers with the FastAPI app
-# Each router handles a specific domain (auth, users, courses, etc.)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(admin_router)
@@ -151,18 +124,13 @@ app.include_router(course_content_router)
 app.include_router(audit_router)
 app.include_router(progress_router)
 
+
 # ==========================================
 # Root / Health Check Endpoint
 # ==========================================
-
 @app.get("/")
 def root() -> dict:
-    """
-    Root endpoint - serves as a health check for the API.
-    
-    Returns:
-        dict: A simple success response confirming the API is running.
-    """
+    """نقطة فحص صحة الـ API."""
     return {
         "success": True,
         "message": "Space Z Backend Running"

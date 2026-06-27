@@ -1,31 +1,29 @@
 """
 Admin Module
-------------
-This module handles all admin-related operations including:
+هذا الموديول يعالج كافة العمليات الإدارية بما في ذلك:
 
-1. Admin Authentication:
-   - get_current_admin dependency (role-based access control)
+مصادقة الأدمن:
+- dependency للتحقق من صلاحيات الأدمن (role-based access control)
 
-2. Dashboard Endpoints:
-   - System statistics (users, students, admins, banned, auth providers)
+نقاط نهاية لوحة التحكم:
+- إحصائيات النظام (المستخدمين، الطلاب، الأدمن، المحظورين، مزودي المصادقة)
 
-3. User Management Endpoints:
-   - List users (with search, filters, pagination)
-   - Get user details (with device history)
-   - Ban/unban users
-   - Delete users (with device cleanup)
-   - Remove user devices
+نقاط نهاية إدارة المستخدمين:
+- سرد المستخدمين (مع البحث، الفلاتر، pagination)
+- جلب تفاصيل المستخدم (مع سجل الأجهزة)
+- حظر/إلغاء حظر المستخدمين
+- حذف المستخدمين (مع تنظيف الأجهزة)
+- إزالة أجهزة المستخدم
 
-All admin endpoints require authentication with "admin" role.
+جميع نقاط النهاية الإدارية تتطلب مصادقة بدور "admin".
 """
-
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-# Local application imports
+# Local imports
 from app.database import get_db
 from app.models import User, UserDevice
 from app.users import get_current_user
@@ -34,7 +32,6 @@ from app.users import get_current_user
 # ==========================================
 # Router Initialization
 # ==========================================
-
 router = APIRouter(
     prefix="/api/admin",
     tags=["Admin"]
@@ -49,28 +46,18 @@ def get_current_admin(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """
-    Dependency to verify the current user has admin privileges.
-    
-    This dependency chains with get_current_user to:
-    1. Validate the JWT token
-    2. Fetch the user from the database
-    3. Check if the user's role is "admin"
-    
-    Args:
-        current_user (User): The authenticated user (injected via get_current_user).
-        
-    Returns:
-        User: The authenticated admin user.
-        
-    Raises:
-        HTTPException: 403 if the user's role is not "admin".
+    Dependency للتحقق من أن المستخدم الحالي لديه صلاحيات أدمن.
+    يعتمد على get_current_user لـ:
+    1. التحقق من JWT token
+    2. جلب المستخدم من قاعدة البيانات
+    3. التحقق من أن دور المستخدم هو "admin"
     """
     if current_user.role != "admin":
         raise HTTPException(
             status_code=403,
             detail="Admin access required"
         )
-    
+
     return current_user
 
 
@@ -84,47 +71,32 @@ def admin_stats(
     admin: User = Depends(get_current_admin)
 ) -> Dict[str, Any]:
     """
-    Fetch system-wide statistics for the admin dashboard.
-    
-    Returns counts for:
-    - Total users
-    - Total students
-    - Total admins
-    - Banned users
-    - Google OAuth users
-    - Local authentication users
-    
-    Args:
-        db (Session): The database session.
-        admin (User): The authenticated admin user.
-        
-    Returns:
-        dict: A success flag and a dictionary of statistics.
+    جلب إحصائيات النظام للوحة تحكم الأدمن.
+    تُرجع عدد: المستخدمين الكلي، الطلاب، الأدمن، المحظورين،
+    مستخدمي Google OAuth، والمستخدمين المحليين.
     """
-    # Fetch all statistics in separate queries
-    # (could be optimized with a single query using CASE WHEN, but this is clearer)
     total_users = db.query(User).count()
-    
+
     total_students = db.query(User).filter(
         User.role == "student"
     ).count()
-    
+
     total_admins = db.query(User).filter(
         User.role == "admin"
     ).count()
-    
+
     banned_users = db.query(User).filter(
-        User.is_banned.is_(True)  # Best practice: use .is_(True) instead of == True
+        User.is_banned.is_(True)
     ).count()
-    
+
     google_users = db.query(User).filter(
         User.auth_provider == "google"
     ).count()
-    
+
     local_users = db.query(User).filter(
         User.auth_provider == "local"
     ).count()
-    
+
     return {
         "success": True,
         "data": {
@@ -154,32 +126,18 @@ def list_users(
     admin: User = Depends(get_current_admin)
 ) -> Dict[str, Any]:
     """
-    List users with optional search, filters, and pagination.
-    
-    Supports:
-    - Search by name, email, or phone number (case-insensitive partial match)
-    - Filter by role (student/admin)
-    - Filter by ban status (banned/unbanned)
-    - Filter by auth provider (local/google)
-    - Pagination with limit and offset
-    
-    Args:
-        search (Optional[str]): Search term for name/email/phone.
-        role (Optional[str]): Filter by user role.
-        is_banned (Optional[bool]): Filter by ban status.
-        auth_provider (Optional[str]): Filter by authentication provider.
-        limit (int): Maximum number of users to return (default: 50).
-        offset (int): Number of users to skip (default: 0).
-        db (Session): The database session.
-        admin (User): The authenticated admin user.
-        
-    Returns:
-        dict: A success flag, total count, and list of users.
+    سرد المستخدمين مع البحث، الفلاتر، والـ pagination.
+    يدعم:
+    - البحث بالاسم، البريد، أو رقم الهاتف (case-insensitive partial match)
+    - الفلترة حسب الدور (student/admin)
+    - الفلترة حسب حالة الحظر
+    - الفلترة حسب مزود المصادقة (local/google)
+    - Pagination بـ limit و offset
     """
-    # 1. Build the base query
+    # 1. بناء الاستعلام الأساسي
     query = db.query(User)
-    
-    # 2. Apply search filter (case-insensitive partial match on multiple fields)
+
+    # 2. تطبيق فلتر البحث (case-insensitive partial match)
     if search:
         query = query.filter(
             or_(
@@ -189,27 +147,27 @@ def list_users(
                 User.phone_number.ilike(f"%{search}%")
             )
         )
-    
-    # 3. Apply role filter
+
+    # 3. تطبيق فلتر الدور
     if role:
         query = query.filter(User.role == role)
-    
-    # 4. Apply ban status filter
+
+    # 4. تطبيق فلتر حالة الحظر
     if is_banned is not None:
         query = query.filter(User.is_banned == is_banned)
-    
-    # 5. Apply auth provider filter
+
+    # 5. تطبيق فلتر مزود المصادقة
     if auth_provider:
         query = query.filter(User.auth_provider == auth_provider)
-    
-    # 6. Get total count (before pagination)
+
+    # 6. الحصول على العدد الإجمالي (قبل pagination)
     total = query.count()
-    
-    # 7. Apply pagination and ordering (newest first)
+
+    # 7. تطبيق pagination والترتيب (الأحدث أولاً)
     users = query.order_by(
         User.created_at.desc()
     ).offset(offset).limit(limit).all()
-    
+
     return {
         "success": True,
         "total": total,
@@ -237,36 +195,18 @@ def get_user_details(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ) -> Dict[str, Any]:
-    """
-    Fetch detailed information about a specific user, including device history.
-    
-    Args:
-        user_id (int): The ID of the user to fetch.
-        db (Session): The database session.
-        admin (User): The authenticated admin user.
-        
-    Returns:
-        dict: A success flag and detailed user information with device list.
-        
-    Raises:
-        HTTPException: 404 if the user is not found.
-    """
-    # 1. Fetch the user
-    user = db.query(User).filter(
-        User.id == user_id
-    ).first()
-    
+    """جلب معلومات تفصيلية عن مستخدم محدد، بما في ذلك سجل الأجهزة."""
+    # 1. جلب المستخدم
+    user = db.query(User).filter(User.id == user_id).first()
+
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
-    
-    # 2. Fetch all devices for this user
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 2. جلب جميع الأجهزة لهذا المستخدم
     devices = db.query(UserDevice).filter(
         UserDevice.user_id == user.id
     ).all()
-    
+
     return {
         "success": True,
         "data": {
@@ -299,43 +239,22 @@ def ban_user(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ) -> Dict[str, Any]:
-    """
-    Ban a user account, preventing them from logging in.
-    
-    Args:
-        user_id (int): The ID of the user to ban.
-        db (Session): The database session.
-        admin (User): The authenticated admin user.
-        
-    Returns:
-        dict: Success message confirming the ban.
-        
-    Raises:
-        HTTPException: 404 if the user is not found.
-        HTTPException: 400 if the admin tries to ban themselves.
-    """
-    # 1. Fetch the user
-    user = db.query(User).filter(
-        User.id == user_id
-    ).first()
-    
+    """حظر حساب مستخدم، مما يمنعه من تسجيل الدخول."""
+    user = db.query(User).filter(User.id == user_id).first()
+
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
-    
-    # 2. Prevent admins from banning themselves
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # منع الأدمن من حظر نفسه
     if user.id == admin.id:
         raise HTTPException(
             status_code=400,
             detail="You cannot ban yourself"
         )
-    
-    # 3. Set ban flag and commit
+
     user.is_banned = True
     db.commit()
-    
+
     return {
         "success": True,
         "message": "User banned successfully"
@@ -348,35 +267,15 @@ def unban_user(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ) -> Dict[str, Any]:
-    """
-    Unban a user account, restoring their access.
-    
-    Args:
-        user_id (int): The ID of the user to unban.
-        db (Session): The database session.
-        admin (User): The authenticated admin user.
-        
-    Returns:
-        dict: Success message confirming the unban.
-        
-    Raises:
-        HTTPException: 404 if the user is not found.
-    """
-    # 1. Fetch the user
-    user = db.query(User).filter(
-        User.id == user_id
-    ).first()
-    
+    """إلغاء حظر حساب مستخدم، واستعادة وصوله."""
+    user = db.query(User).filter(User.id == user_id).first()
+
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
-    
-    # 2. Clear ban flag and commit
+        raise HTTPException(status_code=404, detail="User not found")
+
     user.is_banned = False
     db.commit()
-    
+
     return {
         "success": True,
         "message": "User unbanned successfully"
@@ -390,50 +289,29 @@ def delete_user(
     admin: User = Depends(get_current_admin)
 ) -> Dict[str, Any]:
     """
-    Permanently delete a user account and all associated devices.
-    
-    Warning: This is a hard delete. The user and all their device records
-    will be removed from the database entirely.
-    
-    Args:
-        user_id (int): The ID of the user to delete.
-        db (Session): The database session.
-        admin (User): The authenticated admin user.
-        
-    Returns:
-        dict: Success message confirming deletion.
-        
-    Raises:
-        HTTPException: 404 if the user is not found.
-        HTTPException: 400 if the admin tries to delete themselves.
+    حذف حساب مستخدم بشكل نهائي مع جميع الأجهزة المرتبطة.
+    تحذير: هذا حذف نهائي (hard delete).
     """
-    # 1. Fetch the user
-    user = db.query(User).filter(
-        User.id == user_id
-    ).first()
-    
+    user = db.query(User).filter(User.id == user_id).first()
+
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
-    
-    # 2. Prevent admins from deleting themselves
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # منع الأدمن من حذف نفسه
     if user.id == admin.id:
         raise HTTPException(
             status_code=400,
             detail="You cannot delete yourself"
         )
-    
-    # 3. Delete all associated devices first (cleanup)
+
+    # حذف جميع الأجهزة المرتبطة أولاً
     db.query(UserDevice).filter(
         UserDevice.user_id == user.id
     ).delete()
-    
-    # 4. Delete the user and commit
+
     db.delete(user)
     db.commit()
-    
+
     return {
         "success": True,
         "message": "User deleted successfully"
@@ -448,38 +326,20 @@ def remove_user_device(
     admin: User = Depends(get_current_admin)
 ) -> Dict[str, Any]:
     """
-    Remove a specific device from a user's account.
-    
-    This forces the user to re-authenticate on that device on their next login.
-    
-    Args:
-        user_id (int): The ID of the user who owns the device.
-        device_id (int): The ID of the device to remove.
-        db (Session): The database session.
-        admin (User): The authenticated admin user.
-        
-    Returns:
-        dict: Success message confirming device removal.
-        
-    Raises:
-        HTTPException: 404 if the device is not found or doesn't belong to the user.
+    إزالة جهاز محدد من حساب المستخدم.
+    يجبر هذا المستخدم على إعادة المصادقة على ذلك الجهاز عند تسجيل الدخول القادم.
     """
-    # 1. Fetch the device, ensuring it belongs to the specified user
     device = db.query(UserDevice).filter(
         UserDevice.id == device_id,
         UserDevice.user_id == user_id
     ).first()
-    
+
     if not device:
-        raise HTTPException(
-            status_code=404,
-            detail="Device not found"
-        )
-    
-    # 2. Delete the device and commit
+        raise HTTPException(status_code=404, detail="Device not found")
+
     db.delete(device)
     db.commit()
-    
+
     return {
         "success": True,
         "message": "Device removed successfully"

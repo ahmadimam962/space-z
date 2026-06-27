@@ -1,16 +1,14 @@
 """
 Auth Data Cleanup Module
--------------------------
-This module handles periodic cleanup of expired authentication data
-to prevent database bloat and maintain security.
+هذا الموديول مسؤول عن التنظيف الدوري لبيانات المصادقة المنتهية
+لمنع تضخم قاعدة البيانات والحفاظ على الأمان.
 
-Cleanup targets:
-1. Expired OTP codes (past their expires_at timestamp)
-2. Old pending registrations (older than 30 minutes)
+المهام المستهدفة:
+- حذف رموز OTP المنتهية الصلاحية
+- حذف التسجيلات المعلقة القديمة (أقدم من 30 دقيقة)
 
-This module is called by a scheduled background job (see main.py).
+يتم استدعاء هذا الموديول من قبل مهمة خلفية مجدولة (راجع main.py).
 """
-
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -18,35 +16,39 @@ from sqlalchemy.orm import Session
 from app.models import OTPCode, PendingRegistration
 
 
+# ==========================================
+# Cleanup Function
+# ==========================================
+
 def cleanup_expired_auth_data(db: Session) -> None:
     """
-    Remove expired OTP codes and stale pending registrations from the database.
-    
-    This function performs two cleanup operations:
-    1. Deletes all OTP codes where expires_at < current time
-    2. Deletes all pending registrations created more than 30 minutes ago
-    
+    حذف رموز OTP المنتهية والتسجيلات المعلقة القديمة من قاعدة البيانات.
+
+    تقوم هذه الدالة بعمليتي تنظيف:
+    1. حذف كل رموز OTP حيث expires_at < الوقت الحالي
+    2. حذف كل التسجيلات المعلقة التي تم إنشاؤها منذ أكثر من 30 دقيقة
+
     Args:
-        db (Session): An active SQLAlchemy database session.
-        
+        db (Session): جلسة قاعدة بيانات SQLAlchemy نشطة.
+
     Note:
-        This function commits the transaction. The caller should handle
-        session lifecycle (open/close).
+        هذه الدالة تقوم بـ commit للـ transaction.
+        على المستدعي إدارة دورة حياة الجلسة (فتح/إغلاق).
     """
     now = datetime.utcnow()
-    
-    # 1. Delete expired OTP codes
+
+    # 1. حذف رموز OTP المنتهية
     db.query(OTPCode).filter(
         OTPCode.expires_at < now
     ).delete()
-    
-    # 2. Delete pending registrations older than 30 minutes
-    # (users who didn't complete email verification in time)
+
+    # 2. حذف التسجيلات المعلقة الأقدم من 30 دقيقة
+    # (مستخدمين لم يكملوا التحقق من البريد في الوقت المحدد)
     old_pending_time = now - timedelta(minutes=30)
-    
+
     db.query(PendingRegistration).filter(
         PendingRegistration.created_at < old_pending_time
     ).delete()
-    
-    # Commit both deletions in a single transaction
+
+    # Commit كلا العمليتين في transaction واحدة
     db.commit()

@@ -1,14 +1,11 @@
 """
 Security Module
----------------
-This module handles all security-related operations including:
-- Password hashing and verification
-- JWT token creation and decoding
-- OTP (One-Time Password) hashing and verification
-
-All cryptographic operations use industry-standard libraries (passlib, python-jose).
+هذا الموديول يعالج كل العمليات الأمنية بما في ذلك:
+- تشفير كلمات المرور والتحقق منها
+- إنشاء وفك رموز JWT tokens
+- تشفير والتحقق من OTP
+جميع العمليات التشفيرية تستخدم مكتبات معيارية (passlib, python-jose).
 """
-
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
@@ -21,9 +18,8 @@ from app.config import settings
 # ==========================================
 # Password Hashing Context Initialization
 # ==========================================
-
-# Initialize passlib context with bcrypt algorithm for secure password hashing
-# "deprecated=auto" automatically handles migration to newer hashing algorithms in the future
+# تهيئة passlib باستخدام خوارزمية bcrypt
+# deprecated="auto" يتولى الترقية التلقائية للخوارزميات مستقبلاً
 pwd_context = CryptContext(
     schemes=["bcrypt"],
     deprecated="auto"
@@ -35,29 +31,12 @@ pwd_context = CryptContext(
 # ==========================================
 
 def hash_password(password: str) -> str:
-    """
-    Hash a plain text password using bcrypt.
-    
-    Args:
-        password (str): The plain text password to hash.
-        
-    Returns:
-        str: The hashed password string.
-    """
+    """تشفير كلمة مرور نصية باستخدام bcrypt."""
     return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """
-    Verify a plain text password against its hashed version.
-    
-    Args:
-        plain_password (str): The plain text password to verify.
-        hashed_password (str): The stored hashed password.
-        
-    Returns:
-        bool: True if the password matches, False otherwise.
-    """
+    """التحقق من تطابق كلمة المرور النصية مع النسخة المشفرة."""
     return pwd_context.verify(plain_password, hashed_password)
 
 
@@ -67,31 +46,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(data: Dict[str, Any]) -> str:
     """
-    Create a JWT access token with an expiration time.
-    
-    Args:
-        data (dict): The payload data to encode in the token.
-        
-    Returns:
-        str: The encoded JWT token string.
-        
-    Note:
-        The expiration time is calculated based on settings.ACCESS_TOKEN_EXPIRE_MINUTES.
+    إنشاء JWT access token مع وقت انتهاء صلاحية.
+    يتم حساب وقت الانتهاء بناءً على settings.ACCESS_TOKEN_EXPIRE_MINUTES.
     """
-    # Create a copy to avoid mutating the original data
     to_encode = data.copy()
-    
-    # Calculate expiration time
+
     expire = datetime.utcnow() + timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
-    
-    # Add expiration to payload
-    to_encode.update({
-        "exp": expire
-    })
-    
-    # Encode and return the JWT token
+    to_encode.update({"exp": expire})
+
     return jwt.encode(
         to_encode,
         settings.SECRET_KEY,
@@ -101,16 +65,10 @@ def create_access_token(data: Dict[str, Any]) -> str:
 
 def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     """
-    Decode and validate a JWT access token.
-    
-    Args:
-        token (str): The JWT token to decode.
-        
-    Returns:
-        Optional[dict]: The decoded payload if valid, None if invalid or expired.
+    فك وتشفير JWT access token.
+    يُرجع None في حال كان التوكن غير صالح أو منتهي الصلاحية.
     """
     try:
-        # Decode the token using the secret key and algorithm
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
@@ -118,7 +76,6 @@ def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
         )
         return payload
     except JWTError:
-        # Return None if token is invalid, expired, or malformed
         return None
 
 
@@ -127,27 +84,10 @@ def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
 # ==========================================
 
 def hash_otp(otp: str) -> str:
-    """
-    Hash an OTP (One-Time Password) for secure storage.
-    
-    Args:
-        otp (str): The plain text OTP to hash.
-        
-    Returns:
-        str: The hashed OTP string.
-    """
+    """تشفير OTP للتخزين الآمن."""
     return pwd_context.hash(otp)
 
 
 def verify_otp_code(plain_otp: str, hashed_otp: str) -> bool:
-    """
-    Verify a plain text OTP against its hashed version.
-    
-    Args:
-        plain_otp (str): The plain text OTP to verify.
-        hashed_otp (str): The stored hashed OTP.
-        
-    Returns:
-        bool: True if the OTP matches, False otherwise.
-    """
+    """التحقق من تطابق OTP النصي مع النسخة المشفرة."""
     return pwd_context.verify(plain_otp, hashed_otp)

@@ -1,3 +1,12 @@
+"""
+Enrollments Module
+هذا الموديول مسؤول عن إدارة تسجيلات المستخدمين في الكورسات:
+- عرض الكورسات التي يملكها المستخدم
+- منح كورس لمستخدم معين (عملية إدارية)
+- تسجيل العمليات في AuditLog وإرسال الإشعارات
+"""
+from typing import Dict, Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -7,12 +16,19 @@ from app.users import get_current_user
 from app.schemas import GrantCourseRequest
 from app.admin import get_current_admin
 
-router = APIRouter(
-    tags=["Enrollments"]
-)
+
+# ==========================================
+# Router Initialization
+# ==========================================
+router = APIRouter(tags=["Enrollments"])
 
 
-def my_course_to_dict(enrollment: Enrollment, course: Course):
+# ==========================================
+# Helper Functions
+# ==========================================
+
+def my_course_to_dict(enrollment: Enrollment, course: Course) -> Dict[str, Any]:
+    """تحويل كائن Enrollment + Course إلى قاموس لعرض بياناته."""
     return {
         "enrollmentId": enrollment.id,
         "enrolledAt": enrollment.enrolled_at,
@@ -28,34 +44,33 @@ def my_course_to_dict(enrollment: Enrollment, course: Course):
     }
 
 
+# ==========================================
+# User Endpoints
+# ==========================================
+
 @router.get("/api/my-courses")
 def list_my_courses(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """سرد الكورسات التي يملكها المستخدم الحالي."""
     enrollments = db.query(Enrollment).filter(
         Enrollment.user_id == current_user.id,
         Enrollment.status == "active"
-    ).order_by(
-        Enrollment.enrolled_at.desc()
-    ).all()
+    ).order_by(Enrollment.enrolled_at.desc()).all()
 
     result = []
-
     for enrollment in enrollments:
-        course = db.query(Course).filter(
-            Course.id == enrollment.course_id
-        ).first()
-
+        course = db.query(Course).filter(Course.id == enrollment.course_id).first()
         if course:
-            result.append(
-                my_course_to_dict(enrollment, course)
-            )
+            result.append(my_course_to_dict(enrollment, course))
 
-    return {
-        "success": True,
-        "data": result
-    }
+    return {"success": True, "data": result}
+
+
+# ==========================================
+# Admin Endpoints
+# ==========================================
 
 @router.post("/api/admin/enrollments/grant")
 def grant_course_to_user(
@@ -63,16 +78,17 @@ def grant_course_to_user(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
+    """منح كورس لمستخدم معين (عملية إدارية)."""
+    # 1. التحقق من وجود المستخدم والكورس
     user = db.query(User).filter(User.id == request.user_id).first()
-
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     course = db.query(Course).filter(Course.id == request.course_id).first()
-
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
+    # 2. التحقق من عدم وجود تسجيل مسبق
     existing = db.query(Enrollment).filter(
         Enrollment.user_id == user.id,
         Enrollment.course_id == course.id,
@@ -85,6 +101,7 @@ def grant_course_to_user(
             detail="User already has this course"
         )
 
+    # 3. إنشاء التسجيل + إشعار + سجل تدقيق
     enrollment = Enrollment(
         user_id=user.id,
         course_id=course.id,
