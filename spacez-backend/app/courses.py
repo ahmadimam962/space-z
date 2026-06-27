@@ -162,7 +162,10 @@ def list_store_courses(
         query = query.filter(Course.id.notin_(enrolled_course_ids))
 
     # 4. Order by newest first
-    courses = query.order_by(Course.created_at.desc()).all()
+    courses = query.order_by(
+        Course.is_featured.desc(),
+        Course.created_at.desc()
+    ).all()
 
     return {
         "success": True,
