@@ -41,12 +41,6 @@ from app.audit import router as audit_router
 from app.progress import router as progress_router
 
 
-# ==========================================
-# Database Initialization
-# ==========================================
-# إنشاء الجداول (في الإنتاج يُفضّل استخدام Alembic)
-Base.metadata.create_all(bind=engine)
-
 
 # ==========================================
 # FastAPI Application Initialization
