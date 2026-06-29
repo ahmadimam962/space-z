@@ -84,6 +84,15 @@ class UserDevice(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login_at = Column(DateTime, default=datetime.utcnow)
 
+    __table_args__ = (
+        Index(
+            "uq_user_device_user_device",
+            "user_id",
+            "device_id",
+            unique=True
+        ),
+    )
+
 
 # ==========================================
 # Course Management Models

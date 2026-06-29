@@ -68,6 +68,11 @@ OTP_RATE_LIMIT_MINUTES = 15
 OTP_EXPIRE_MINUTES = 10
 PASSWORD_RESET_PURPOSE = "password_reset"
 
+LOGIN_RATE_LIMIT_COUNT = 10
+LOGIN_RATE_LIMIT_MINUTES = 15
+
+login_attempts = {}
+
 
 # ==========================================
 # Helper Functions
@@ -184,7 +189,21 @@ def register_device_or_fail(user_id: int, device_id: str, db: Session) -> None:
 
     db.commit()
 
+def check_login_rate_limit(identifier: str):
+    now = datetime.utcnow()
+    window_start = now - timedelta(minutes=LOGIN_RATE_LIMIT_MINUTES)
 
+    attempts = login_attempts.get(identifier, [])
+    attempts = [t for t in attempts if t >= window_start]
+
+    if len(attempts) >= LOGIN_RATE_LIMIT_COUNT:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many login attempts. Please try again later."
+        )
+
+    attempts.append(now)
+    login_attempts[identifier] = attempts
 # ==========================================
 # Registration Endpoints
 # ==========================================
@@ -396,6 +415,9 @@ def login(
     4. تسجيل أو تحديث الجهاز
     5. توليد وإرجاع JWT token
     """
+
+    check_login_rate_limit(request.identifier)
+
     # 1. إيجاد المستخدم بالبريد أو الهاتف
     user = db.query(User).filter(
         (User.email == request.identifier) |
@@ -583,6 +605,20 @@ def forgot_password(
 
     # 3. التحقق من حدود معدل OTP (مع cooldown)
     now = datetime.utcnow()
+
+    window_start = now - timedelta(minutes=OTP_RATE_LIMIT_MINUTES)
+
+    otp_count = db.query(OTPCode).filter(
+        OTPCode.email == request.email,
+        OTPCode.purpose == PASSWORD_RESET_PURPOSE,
+        OTPCode.created_at >= window_start
+    ).count()
+
+    if otp_count >= OTP_RATE_LIMIT_COUNT:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many password reset requests. Please try again later."
+        )
 
     last_otp = db.query(OTPCode).filter(
         OTPCode.email == request.email,
