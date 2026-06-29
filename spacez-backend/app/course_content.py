@@ -19,6 +19,7 @@ from app.schemas import (
 )
 from app.admin import get_current_admin
 from app.users import get_current_user
+from app.audit_utils import create_audit_log
 
 
 # ==========================================
@@ -134,6 +135,15 @@ def admin_create_section(
         sort_order=request.sort_order
     )
 
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="create_section",
+        target_type="course",
+        target_id=course_id,
+        details=f"Created section '{request.title}' for course {course_id}"
+    )
+
     db.add(section)
     db.commit()
     db.refresh(section)
@@ -163,6 +173,15 @@ def admin_update_section(
     if request.sort_order is not None:
         section.sort_order = request.sort_order
 
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="update_section",
+        target_type="section",
+        target_id=section.id,
+        details=f"Updated section {section.id} - {section.title}"
+    )
+
     db.commit()
     db.refresh(section)
 
@@ -188,6 +207,15 @@ def admin_delete_section(
     db.query(CourseLesson).filter(
         CourseLesson.section_id == section.id
     ).delete()
+
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="delete_section",
+        target_type="section",
+        target_id=section.id,
+        details=f"Deleted section {section.id} from course {section.course_id}"
+    )
 
     db.delete(section)
     db.commit()
@@ -229,6 +257,15 @@ def admin_create_lesson(
         content_text=request.content_text,
         sort_order=request.sort_order,
         is_free_preview=request.is_free_preview
+    )
+
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="create_lesson",
+        target_type="lesson",
+        target_id=lesson.id,
+        details=f"Created lesson '{request.title}' in section {section.id}"
     )
 
     db.add(lesson)
@@ -283,6 +320,15 @@ def admin_update_lesson(
     if request.is_free_preview is not None:
         lesson.is_free_preview = request.is_free_preview
 
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="update_lesson",
+        target_type="lesson",
+        target_id=lesson.id,
+        details=f"Updated lesson {lesson.id} - {lesson.title}"
+    )
+
     db.commit()
     db.refresh(lesson)
 
@@ -303,6 +349,15 @@ def admin_delete_lesson(
     lesson = db.query(CourseLesson).filter(CourseLesson.id == lesson_id).first()
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
+    
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="delete_lesson",
+        target_type="lesson",
+        target_id=lesson.id,
+        details=f"Deleted lesson {lesson.id} - {lesson.title}"
+    )
 
     db.delete(lesson)
     db.commit()

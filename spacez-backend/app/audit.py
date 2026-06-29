@@ -25,18 +25,6 @@ router = APIRouter(
 # Helper Functions
 # ==========================================
 
-def audit_to_dict(log: AuditLog) -> dict:
-    """تحويل كائن AuditLog إلى قاموس للعرض."""
-    return {
-        "id": log.id,
-        "adminId": log.admin_id,
-        "action": log.action,
-        "targetType": log.target_type,
-        "targetId": log.target_id,
-        "details": log.details,
-        "createdAt": log.created_at
-    }
-
 
 # ==========================================
 # Endpoints

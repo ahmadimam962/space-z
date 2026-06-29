@@ -19,6 +19,7 @@ from app.schemas import (
     PaymentSettingUpdateRequest
 )
 from app.admin import get_current_admin
+from app.audit_utils import create_audit_log
 
 
 # ==========================================
@@ -107,8 +108,18 @@ def create_payment_setting(
     )
 
     db.add(payment)
-    db.commit()
     db.refresh(payment)
+
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="create_payment_setting",
+        target_type="payment_setting",
+        target_id=payment.id,
+        details=f"Created payment setting {payment.id} - {payment.method_name}"
+    )
+    db.commit()
+
 
     return {
         "success": True,
@@ -154,6 +165,15 @@ def update_payment_setting(
     if request.is_active is not None:
         payment.is_active = request.is_active
 
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="update_payment_setting",
+        target_type="payment_setting",
+        target_id=payment.id,
+        details=f"Updated payment setting {payment.id} - {payment.method_name}"
+    )
+
     db.commit()
     db.refresh(payment)
 
@@ -180,6 +200,16 @@ def delete_payment_setting(
             status_code=404,
             detail="Payment setting not found"
         )
+    
+
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="delete_payment_setting",
+        target_type="payment_setting",
+        target_id=payment.id,
+        details=f"Deleted payment setting {payment.id} - {payment.method_name}"
+    )
 
     db.delete(payment)
     db.commit()

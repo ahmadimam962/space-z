@@ -29,6 +29,7 @@ from app.models import Course, User, Enrollment
 from app.schemas import CourseCreateRequest, CourseUpdateRequest
 from app.admin import get_current_admin
 from app.users import get_current_user
+from app.audit_utils import create_audit_log
 
 
 # ==========================================
@@ -227,6 +228,17 @@ def create_course(
     db.add(course)
     db.commit()
     db.refresh(course)
+    
+    
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="create_course",
+        target_type="course",
+        target_id=course.id,
+        details=f"Created course {course.id} - {course.title}"
+    )
+    db.commit()
 
     return {
         "success": True,
@@ -278,6 +290,16 @@ def update_course(
     if request.is_featured is not None:
         course.is_featured = request.is_featured
 
+
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="update_course",
+        target_type="course",
+        target_id=course.id,
+        details=f"Updated course {course.id} - {course.title}"
+    )
+
     db.commit()
     db.refresh(course)
 
@@ -302,6 +324,15 @@ def delete_course(
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+    
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="delete_course",
+        target_type="course",
+        target_id=course.id,
+        details=f"Deleted course {course.id} - {course.title}"
+    )
 
     db.delete(course)
     db.commit()

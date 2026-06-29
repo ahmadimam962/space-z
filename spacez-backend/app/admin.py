@@ -27,8 +27,7 @@ from sqlalchemy import or_
 from app.database import get_db
 from app.models import User, UserDevice
 from app.users import get_current_user
-
-
+from app.audit_utils import create_audit_log
 # ==========================================
 # Router Initialization
 # ==========================================
@@ -251,7 +250,15 @@ def ban_user(
             status_code=400,
             detail="You cannot ban yourself"
         )
-
+    
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="ban_user",
+        target_type="user",
+        target_id=user.id,
+        details=f"Banned user {user.id} - {user.email}"
+    )
     user.is_banned = True
     db.commit()
 
@@ -272,6 +279,15 @@ def unban_user(
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="unban_user",
+        target_type="user",
+        target_id=user.id,
+        details=f"Unbanned user {user.id} - {user.email}"
+    )
 
     user.is_banned = False
     db.commit()
@@ -309,6 +325,15 @@ def delete_user(
         UserDevice.user_id == user.id
     ).delete()
 
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="delete_user",
+        target_type="user",
+        target_id=user.id,
+        details=f"Deleted user {user.id} - {user.email}"
+    )
+
     db.delete(user)
     db.commit()
 
@@ -336,6 +361,15 @@ def remove_user_device(
 
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+    
+    create_audit_log(
+        db=db,
+        admin_id=admin.id,
+        action="remove_user_device",
+        target_type="user_device",
+        target_id=device.id,
+        details=f"Removed device {device.device_id} from user {user_id}"
+    )
 
     db.delete(device)
     db.commit()
