@@ -168,20 +168,31 @@ def my_purchase_history(
 @router.get("/api/admin/purchase-requests")
 def admin_list_purchase_requests(
     status: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    """سرد طلبات الشراء لمراجعتها من قبل الإدارة."""
+    offset = (page - 1) * limit
+
     query = db.query(PurchaseRequest)
+
     if status:
         query = query.filter(PurchaseRequest.status == status)
 
-    purchases = query.order_by(PurchaseRequest.created_at.desc()).all()
+    total = query.count()
+
+    purchases = query.order_by(
+        PurchaseRequest.created_at.desc()
+    ).offset(offset).limit(limit).all()
+
     return {
         "success": True,
+        "total": total,
+        "page": page,
+        "limit": limit,
         "data": [purchase_to_admin_dict(p, db) for p in purchases]
     }
-
 
 @router.post("/api/admin/purchase-requests/{purchase_id}/approve")
 def approve_purchase_request(

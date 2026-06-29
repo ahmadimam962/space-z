@@ -45,13 +45,22 @@ def notification_to_dict(notification: Notification) -> Dict[str, Any]:
 
 @router.get("")
 def list_my_notifications(
+    page: int = 1,
+    limit: int = 20,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """سرد إشعارات المستخدم الحالي مع عدد غير المقروءة."""
-    notifications = db.query(Notification).filter(
+    offset = (page - 1) * limit
+
+    query = db.query(Notification).filter(
         Notification.user_id == current_user.id
-    ).order_by(Notification.created_at.desc()).all()
+    )
+
+    total = query.count()
+
+    notifications = query.order_by(
+        Notification.created_at.desc()
+    ).offset(offset).limit(limit).all()
 
     unread_count = db.query(Notification).filter(
         Notification.user_id == current_user.id,
@@ -60,6 +69,9 @@ def list_my_notifications(
 
     return {
         "success": True,
+        "total": total,
+        "page": page,
+        "limit": limit,
         "unreadCount": unread_count,
         "data": [notification_to_dict(n) for n in notifications]
     }

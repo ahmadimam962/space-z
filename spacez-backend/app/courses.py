@@ -180,20 +180,26 @@ def list_store_courses(
 
 @router.get("/api/admin/courses")
 def admin_list_courses(
+    page: int = 1,
+    limit: int = 50,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
-) -> Dict[str, Any]:
-    """
-    Fetch all courses for the admin dashboard.
-    Unlike the public endpoint, this returns ALL courses regardless of status,
-    so admins can manage hidden and draft courses as well.
-    """
-    courses = db.query(Course).order_by(
+):
+    offset = (page - 1) * limit
+
+    query = db.query(Course)
+
+    total = query.count()
+
+    courses = query.order_by(
         Course.created_at.desc()
-    ).all()
+    ).offset(offset).limit(limit).all()
 
     return {
         "success": True,
+        "total": total,
+        "page": page,
+        "limit": limit,
         "data": [course_to_dict(course) for course in courses]
     }
 

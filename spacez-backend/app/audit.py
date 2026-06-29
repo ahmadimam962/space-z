@@ -32,15 +32,25 @@ router = APIRouter(
 
 @router.get("")
 def list_audit_logs(
+    page: int = 1,
+    limit: int = 100,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    """سرد آخر 200 سجل تدقيق (الأحدث أولاً)."""
-    logs = db.query(AuditLog).order_by(
+    offset = (page - 1) * limit
+
+    query = db.query(AuditLog)
+
+    total = query.count()
+
+    logs = query.order_by(
         AuditLog.created_at.desc()
-    ).limit(200).all()
+    ).offset(offset).limit(limit).all()
 
     return {
         "success": True,
+        "total": total,
+        "page": page,
+        "limit": limit,
         "data": [audit_to_dict(log) for log in logs]
     }
