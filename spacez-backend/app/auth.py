@@ -36,15 +36,15 @@ from google.auth.transport import requests as google_requests
 # Local imports
 from app.config import settings
 from app.database import get_db
-from app.models import User, OTPCode, PendingRegistration, UserDevice
+from app.models import User, OTPCode, PendingRegistration, UserDevice,RefreshToken
 from app.schemas import (
     RegisterRequest, VerifyOTPRequest, LoginRequest,
     ResendOTPRequest, GoogleLoginRequest,
-    ForgotPasswordRequest, ResetPasswordRequest, LogoutRequest
+    ForgotPasswordRequest, ResetPasswordRequest, LogoutRequest,RefreshTokenRequest
 )
 from app.security import (
     hash_password, verify_password, create_access_token,
-    hash_otp, verify_otp_code
+    hash_otp, verify_otp_code,  create_refresh_token
 )
 from app.email_service import send_otp_email
 from app.users import get_current_user
@@ -73,7 +73,7 @@ LOGIN_RATE_LIMIT_MINUTES = 15
 
 login_attempts = {}
 
-
+REFRESH_TOKEN_EXPIRE_DAYS = 30
 # ==========================================
 # Helper Functions
 # ==========================================
@@ -204,6 +204,27 @@ def check_login_rate_limit(identifier: str):
 
     attempts.append(now)
     login_attempts[identifier] = attempts
+
+
+def create_or_replace_refresh_token(user_id: int, device_id: str, db: Session) -> str:
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id,
+        RefreshToken.device_id == device_id
+    ).delete()
+
+    raw_token = create_refresh_token()
+
+    refresh = RefreshToken(
+        user_id=user_id,
+        token=raw_token,
+        device_id=device_id,
+        expires_at=datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    )
+
+    db.add(refresh)
+    db.commit()
+
+    return raw_token
 # ==========================================
 # Registration Endpoints
 # ==========================================
@@ -465,10 +486,13 @@ def login(
         "role": user.role
     })
 
+    refresh_token = create_or_replace_refresh_token(user.id, request.deviceId, db)
+
     return {
         "success": True,
         "message": "Login successful",
         "token": token,
+        "refreshToken": refresh_token,
         "user": {
             "id": user.id,
             "firstName": user.first_name,
@@ -554,10 +578,13 @@ def google_login(
         "role": user.role
     })
 
+    refresh_token = create_or_replace_refresh_token(user.id, request.deviceId, db)
+
     return {
         "success": True,
         "message": "Google login successful",
         "token": token,
+        "refreshToken": refresh_token,
         "requiresPhoneNumber": user.phone_number is None,
         "user": {
             "id": user.id,
@@ -738,6 +765,38 @@ def reset_password(
 # Logout Endpoint
 # ==========================================
 
+@router.post("/refresh")
+def refresh_access_token(
+    request: RefreshTokenRequest,
+    db: Session = Depends(get_db)
+):
+    refresh = db.query(RefreshToken).filter(
+        RefreshToken.token == request.refresh_token,
+        RefreshToken.is_revoked == False
+    ).first()
+
+    if not refresh:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    if refresh.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+
+    user = db.query(User).filter(User.id == refresh.user_id).first()
+
+    if not user or user.is_banned:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
+    token = create_access_token({
+        "sub": str(user.id),
+        "role": user.role
+    })
+
+    return {
+        "success": True,
+        "token": token
+    }
+
+
 @router.post("/logout")
 def logout(
     request: LogoutRequest,
@@ -753,6 +812,15 @@ def logout(
     if device:
         db.delete(device)
         db.commit()
+
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == current_user.id,
+        RefreshToken.device_id == request.deviceId
+    ).update({
+        RefreshToken.is_revoked: True
+    })
+
+    db.commit()
 
     return {
         "success": True,

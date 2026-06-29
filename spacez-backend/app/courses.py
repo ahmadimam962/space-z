@@ -161,6 +161,11 @@ def list_store_courses(
     # 3. Exclude already enrolled courses (if any)
     if enrolled_course_ids:
         query = query.filter(Course.id.notin_(enrolled_course_ids))
+    
+    courses = query.order_by(
+        Course.is_featured.desc(),
+        Course.created_at.desc()
+    ).all()
 
     # 4. Order by newest first
     courses = query.order_by(

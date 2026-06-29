@@ -184,3 +184,6 @@ class PurchaseAdminNoteRequest(BaseModel):
 class MarkLessonProgressRequest(BaseModel):
     lesson_id: int
     is_completed: bool = True
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str

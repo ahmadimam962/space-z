@@ -8,6 +8,7 @@ Security Module
 """
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
+import secrets
 
 from jose import jwt, JWTError
 from passlib.context import CryptContext
@@ -91,3 +92,6 @@ def hash_otp(otp: str) -> str:
 def verify_otp_code(plain_otp: str, hashed_otp: str) -> bool:
     """التحقق من تطابق OTP النصي مع النسخة المشفرة."""
     return pwd_context.verify(plain_otp, hashed_otp)
+
+def create_refresh_token() -> str:
+    return secrets.token_urlsafe(64)
