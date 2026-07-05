@@ -15,7 +15,6 @@ from app.database import get_db
 from app.models import User, Course, CourseLesson, Enrollment, LessonProgress
 from app.schemas import MarkLessonProgressRequest
 from app.users import get_current_user
-from app.certificates import create_certificate_if_eligible
 
 
 # ==========================================
@@ -82,26 +81,6 @@ def mark_lesson_progress(
     progress.last_watched_at = datetime.utcnow()
     progress.completed_at = datetime.utcnow() if request.is_completed else None
 
-    # 5. إصدار شهادة تلقائياً إذا اكتمل الكورس 100%
-    certificate_created = None
-    if request.is_completed:
-        total_lessons = db.query(CourseLesson).filter(
-            CourseLesson.course_id == lesson.course_id
-        ).count()
-
-        completed_lessons = db.query(LessonProgress).filter(
-            LessonProgress.user_id == current_user.id,
-            LessonProgress.course_id == lesson.course_id,
-            LessonProgress.is_completed == True
-        ).count()
-
-        if total_lessons > 0 and completed_lessons >= total_lessons:
-            certificate_created = create_certificate_if_eligible(
-                db,
-                current_user.id,
-                lesson.course_id
-            )
-
     db.commit()
     db.refresh(progress)
 
@@ -113,9 +92,7 @@ def mark_lesson_progress(
             "courseId": progress.course_id,
             "isCompleted": progress.is_completed,
             "completedAt": progress.completed_at,
-            "lastWatchedAt": progress.last_watched_at,
-            "certificateIssued": certificate_created is not None,
-            "certificateCode": certificate_created.certificate_code if certificate_created else None
+            "lastWatchedAt": progress.last_watched_at
         }
     }
 

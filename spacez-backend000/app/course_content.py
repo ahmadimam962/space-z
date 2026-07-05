@@ -15,10 +15,8 @@ from app.models import (
 )
 from app.schemas import (
     SectionCreateRequest, SectionUpdateRequest,
-    LessonCreateRequest, LessonUpdateRequest,
-    BulkCourseContentRequest
+    LessonCreateRequest, LessonUpdateRequest
 )
-
 from app.admin import get_current_admin
 from app.users import get_current_user
 from app.audit_utils import create_audit_log
@@ -370,75 +368,6 @@ def admin_delete_lesson(
     }
 
 
-
-@router.post("/api/admin/courses/{course_id}/content/bulk")
-def admin_bulk_create_course_content(
-    course_id: int,
-    request: BulkCourseContentRequest,
-    db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin)
-):
-    course = ensure_course_exists(course_id, db)
-
-    created_sections = 0
-    created_lessons = 0
-
-    for section_data in request.sections:
-        section = CourseSection(
-            course_id=course.id,
-            title=section_data.title,
-            sort_order=section_data.sort_order
-        )
-
-        db.add(section)
-        db.flush()
-
-        created_sections += 1
-
-        for lesson_data in section_data.lessons:
-            if lesson_data.lesson_type not in ["video", "pdf", "text"]:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid lesson type: {lesson_data.lesson_type}"
-                )
-
-            lesson = CourseLesson(
-                course_id=course.id,
-                section_id=section.id,
-                title=lesson_data.title,
-                description=lesson_data.description,
-                lesson_type=lesson_data.lesson_type,
-                video_provider=lesson_data.video_provider,
-                video_url=lesson_data.video_url,
-                pdf_url=lesson_data.pdf_url,
-                content_text=lesson_data.content_text,
-                sort_order=lesson_data.sort_order,
-                is_free_preview=lesson_data.is_free_preview
-            )
-
-            db.add(lesson)
-            created_lessons += 1
-
-    create_audit_log(
-        db=db,
-        admin_id=admin.id,
-        action="bulk_create_course_content",
-        target_type="course",
-        target_id=course.id,
-        details=f"Bulk created {created_sections} sections and {created_lessons} lessons for course {course.id} - {course.title}"
-    )
-
-    db.commit()
-
-    return {
-        "success": True,
-        "message": "Course content imported successfully",
-        "data": {
-            "courseId": course.id,
-            "createdSections": created_sections,
-            "createdLessons": created_lessons
-        }
-    }
 # ==========================================
 # Student Endpoints
 # ==========================================

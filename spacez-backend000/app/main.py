@@ -24,7 +24,7 @@ from app.models import (
     User, OTPCode, PendingRegistration, UserDevice,
     Course, PaymentSetting, PurchaseRequest, Enrollment,
     Notification, CourseSection, CourseLesson,
-    Coupon, AuditLog, LessonProgress, Certificate
+    Coupon, AuditLog, LessonProgress
 )
 
 # استيراد جميع الـ Routers
@@ -39,7 +39,6 @@ from app.enrollments import router as enrollments_router
 from app.course_content import router as course_content_router
 from app.audit import router as audit_router
 from app.progress import router as progress_router
-from app.certificates import router as certificates_router
 
 
 
@@ -118,7 +117,6 @@ app.include_router(enrollments_router)
 app.include_router(course_content_router)
 app.include_router(audit_router)
 app.include_router(progress_router)
-app.include_router(certificates_router)
 
 
 # ==========================================

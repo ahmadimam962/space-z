@@ -26,43 +26,21 @@ router = APIRouter(
 # ==========================================
 
 
-def audit_to_dict(log):
-    return {
-        "id": log.id,
-        "adminId": log.admin_id,
-        "action": log.action,
-        "targetType": log.target_type,
-        "targetId": log.target_id,
-        "details": log.details,
-        "createdAt": log.created_at
-    }
-
-
 # ==========================================
 # Endpoints
 # ==========================================
 
 @router.get("")
 def list_audit_logs(
-    page: int = 1,
-    limit: int = 100,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    offset = (page - 1) * limit
-
-    query = db.query(AuditLog)
-
-    total = query.count()
-
-    logs = query.order_by(
+    """سرد آخر 200 سجل تدقيق (الأحدث أولاً)."""
+    logs = db.query(AuditLog).order_by(
         AuditLog.created_at.desc()
-    ).offset(offset).limit(limit).all()
+    ).limit(200).all()
 
     return {
         "success": True,
-        "total": total,
-        "page": page,
-        "limit": limit,
         "data": [audit_to_dict(log) for log in logs]
     }

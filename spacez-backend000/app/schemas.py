@@ -3,8 +3,9 @@ Pydantic Schemas Module
 هذا الموديول يعرّف كافة مخططات التحقق من البيانات (Data Validation Schemas).
 تم تنظيمها حسب النطاق (Domain) لضمان سهولة الصيانة.
 """
-from typing import Optional, List
+from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
+
 
 # ==========================================
 # 1. Authentication Schemas
@@ -183,28 +184,3 @@ class PurchaseAdminNoteRequest(BaseModel):
 class MarkLessonProgressRequest(BaseModel):
     lesson_id: int
     is_completed: bool = True
-
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str
-
-
-class BulkLessonRequest(BaseModel):
-    title: str
-    description: Optional[str] = None
-    lesson_type: str = "video"
-    video_provider: Optional[str] = "external"
-    video_url: Optional[str] = None
-    pdf_url: Optional[str] = None
-    content_text: Optional[str] = None
-    sort_order: int = 1
-    is_free_preview: bool = False
-
-
-class BulkSectionRequest(BaseModel):
-    title: str
-    sort_order: int = 1
-    lessons: List[BulkLessonRequest] = []
-
-
-class BulkCourseContentRequest(BaseModel):
-    sections: List[BulkSectionRequest]
