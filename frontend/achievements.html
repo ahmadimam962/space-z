@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <title>شهاداتي - Space Z</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Tajawal', sans-serif; background-color: #060911; }
+        .glass-card { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.1); transition: 0.3s; }
+        .glass-card:hover { border-color: #2dd4bf; }
+    </style>
+</head>
+<body class="text-zinc-100 min-h-screen">
+
+<nav class="border-b border-slate-800 bg-slate-900/50">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+    <div class="text-2xl font-bold text-teal-400">SPACE <span class="text-white">Z</span></div>
+    <div class="flex items-center gap-4">
+      <a href="dashboard.html" id="dashboardLink" class="text-teal-400 hover:underline">لوحة التحكم</a>
+      <button id="langToggle" class="text-sm bg-slate-800 px-3 py-1 rounded-full hover:bg-slate-700">English</button>
+    </div>
+  </div>
+</nav>
+
+    <main class="max-w-7xl mx-auto p-6 md:p-12">
+        <h1 class="text-3xl font-bold mb-2" data-en="My Certificates & Achievements" data-ar="شهاداتي وإنجازاتي">شهاداتي وإنجازاتي 🎓</h1>
+        <p class="text-zinc-400 mb-10" data-en="Here you can find all your certificates." data-ar="هنا تجد جميع الشهادات التي حصلت عليها بعد إتمام كورساتك بنجاح.">هنا تجد جميع الشهادات التي حصلت عليها بعد إتمام كورساتك بنجاح.</p>
+
+        <div id="certificatesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        <p id="emptyMsg" class="hidden text-center text-zinc-500 mt-20" data-en="No certificates yet." data-ar="لا توجد شهادات حالياً. استمر في الدراسة للحصول على شهادتك الأولى!">لا توجد شهادات حالياً. استمر في الدراسة للحصول على شهادتك الأولى!</p>
+    </main>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/utils.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/achievements.js"></script>
+</body>
+</html>

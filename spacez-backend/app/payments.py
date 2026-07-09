@@ -108,6 +108,7 @@ def create_payment_setting(
     )
 
     db.add(payment)
+    db.commit()
     db.refresh(payment)
 
     create_audit_log(
@@ -118,8 +119,8 @@ def create_payment_setting(
         target_id=payment.id,
         details=f"Created payment setting {payment.id} - {payment.method_name}"
     )
-    db.commit()
 
+    db.commit()
 
     return {
         "success": True,

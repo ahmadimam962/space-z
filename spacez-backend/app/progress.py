@@ -82,6 +82,9 @@ def mark_lesson_progress(
     progress.last_watched_at = datetime.utcnow()
     progress.completed_at = datetime.utcnow() if request.is_completed else None
 
+# حفظ التغييرات مؤقتاً حتى تدخل في الاستعلامات التالية
+    db.flush()
+
     # 5. إصدار شهادة تلقائياً إذا اكتمل الكورس 100%
     certificate_created = None
     if request.is_completed:

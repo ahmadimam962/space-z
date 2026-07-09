@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Enrollment, Course, User, Notification, AuditLog
+from app.models import Enrollment, Course, User, Notification, AuditLog, CourseLesson, LessonProgress
 from app.users import get_current_user
 from app.schemas import GrantCourseRequest
 from app.admin import get_current_admin
@@ -26,13 +26,29 @@ router = APIRouter(tags=["Enrollments"])
 # ==========================================
 # Helper Functions
 # ==========================================
+def my_course_to_dict(enrollment: Enrollment, course: Course, db: Session, user_id: int) -> Dict[str, Any]:
+    """تحويل Enrollment + Course إلى قاموس مع نسبة التقدم."""
 
-def my_course_to_dict(enrollment: Enrollment, course: Course) -> Dict[str, Any]:
-    """تحويل كائن Enrollment + Course إلى قاموس لعرض بياناته."""
+    total_lessons = db.query(CourseLesson).filter(
+        CourseLesson.course_id == course.id
+    ).count()
+
+    completed_lessons = db.query(LessonProgress).filter(
+        LessonProgress.user_id == user_id,
+        LessonProgress.course_id == course.id,
+        LessonProgress.is_completed == True
+    ).count()
+
+    progress_percent = round((completed_lessons / total_lessons) * 100) if total_lessons > 0 else 0
+
     return {
         "enrollmentId": enrollment.id,
         "enrolledAt": enrollment.enrolled_at,
         "status": enrollment.status,
+        "progress": progress_percent,
+        "progressPercent": progress_percent,
+        "totalLessons": total_lessons,
+        "completedLessons": completed_lessons,
         "course": {
             "id": course.id,
             "title": course.title,
@@ -63,7 +79,7 @@ def list_my_courses(
     for enrollment in enrollments:
         course = db.query(Course).filter(Course.id == enrollment.course_id).first()
         if course:
-            result.append(my_course_to_dict(enrollment, course))
+            result.append(my_course_to_dict(enrollment, course, db, current_user.id))
 
     return {"success": True, "data": result}
 
