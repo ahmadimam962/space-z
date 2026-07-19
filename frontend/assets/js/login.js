@@ -1,3 +1,48 @@
+// ============================================
+// دوال مساعدة (Utility Functions)
+// ============================================
+
+function getLang() {
+    return localStorage.getItem('userLang') || 'ar';
+}
+
+function getDeviceFingerprint() {
+    // بصمة الجهاز البسيطة
+    const fingerprint = navigator.userAgent + navigator.language + screen.colorDepth;
+    let hash = 0;
+    for (let i = 0; i < fingerprint.length; i++) {
+        const char = fingerprint.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(16);
+}
+
+function mapErrorMessage(message) {
+    const lang = getLang();
+    const errorMessages = {
+        'Invalid credentials': lang === 'ar' ? 'البريد أو كلمة المرور غير صحيحة' : 'Invalid email or password',
+        'Email already registered': lang === 'ar' ? 'البريد الإلكتروني مسجل مسبقاً' : 'Email already registered',
+        'Phone number already registered': lang === 'ar' ? 'رقم الهاتف مسجل مسبقاً' : 'Phone number already registered',
+        'Invalid OTP': lang === 'ar' ? 'رمز التحقق غير صحيح' : 'Invalid verification code',
+        'OTP expired': lang === 'ar' ? 'انتهت صلاحية رمز التحقق' : 'Verification code expired',
+        'User is banned': lang === 'ar' ? 'الحساب محظور، يرجى التواصل مع الدعم' : 'Account is banned',
+        'Failed to fetch': lang === 'ar' ? 'فشل الاتصال بالسيرفر' : 'Failed to connect to server'
+    };
+    return errorMessages[message] || message;
+}
+
+function showMessage(elementId, message, type = 'error') {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.innerText = message;
+        element.className = `mt-4 text-sm ${type === 'error' ? 'text-red-400' : 'text-teal-400'}`;
+        setTimeout(() => {
+            element.innerText = '';
+        }, 5000);
+    }
+}
+
 const translations = {
     ar: {
         title: "بوابة Space Z التعليمية",
@@ -134,7 +179,6 @@ function closeForgotModal() {
 }
 
 async function handleCredentialResponse(response) {
-    const lang = getLang();
     const googleToken = response.credential;
     const deviceId = getDeviceFingerprint();
 

@@ -21,6 +21,7 @@ from reportlab.lib.units import cm
 from reportlab.lib.colors import HexColor
 import qrcode
 
+
 # المكتبات الجديدة للعربية
 import arabic_reshaper
 from bidi.algorithm import get_display
@@ -201,210 +202,77 @@ def download_certificate(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # جلب البيانات من قاعدة البيانات
     certificate = db.query(Certificate).filter(
         Certificate.certificate_code == certificate_code
     ).first()
-
+    
     if not certificate:
         raise HTTPException(404, "Certificate not found")
-
+    
     if certificate.user_id != current_user.id:
         raise HTTPException(403, "Not allowed")
-
+    
     course = db.query(Course).filter(
         Course.id == certificate.course_id
     ).first()
-
-    # Generate QR Code
-    qr = qrcode.make(
-        f"https://spacez.edu/verify/{certificate.certificate_code}"
-    )
-    qr_buffer = BytesIO()
-    qr.save(qr_buffer, format="PNG")
-    qr_buffer.seek(0)
-
-    # Create PDF
+    
+    user = db.query(User).filter(User.id == certificate.user_id).first()
+    
+    student_name = f"{user.first_name} {user.last_name}" if user else "Student Name"
+    course_title = str(course.title) if (course and course.title) else "Voice Acting - Introduction Level"
+    
     pdf_buffer = BytesIO()
     
+    # إعداد الصفحة A4 بالعرض (Landscape)
     doc = SimpleDocTemplate(
         pdf_buffer,
-        pagesize=(29.7*cm, 21*cm),
-        rightMargin=1.5*cm,
-        leftMargin=1.5*cm,
-        topMargin=1.5*cm,
-        bottomMargin=1.5*cm
-    )
-
-    styles = getSampleStyleSheet()
-    
-    # Custom styles with Arabic font
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles["Title"],
-        fontName="Arabic",
-        fontSize=32,
-        textColor=HexColor("#1a5f7a"),
-        alignment=TA_CENTER,
-        spaceAfter=20
+        pagesize=(29.7 * cm, 21 * cm),
+        leftMargin=0, rightMargin=0, topMargin=0, bottomMargin=0
     )
     
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles["Heading1"],
-        fontName="Arabic",
-        fontSize=28,
-        textColor=HexColor("#159895"),
-        alignment=TA_CENTER,
-        spaceAfter=30
-    )
-    
-    body_style = ParagraphStyle(
-        'CustomBody',
-        parent=styles["BodyText"],
-        fontName="Arabic",
-        fontSize=14,
-        alignment=TA_CENTER,
-        spaceAfter=15
-    )
-    
-    name_style = ParagraphStyle(
-        'StudentName',
-        parent=styles["Heading2"],
-        fontName="Arabic",
-        fontSize=32,
-        textColor=HexColor("#570a57"),
-        alignment=TA_CENTER,
-        spaceAfter=20,
-        leading=40
-    )
-    
-    story = []
-    story.append(Spacer(1, 1*cm))
-    
-    # SPACE Z Title
-    story.append(Paragraph("SPACE Z", title_style))
-    story.append(Spacer(1, 0.5*cm))
-    
-    # Decorative line
-    decorative_style = ParagraphStyle(
-        'Decorative',
-        parent=body_style,
-        fontSize=10,
-        textColor=HexColor("#159895"),
-        letterSpacing=5
-    )
-    story.append(Paragraph("━" * 40, decorative_style))
-    story.append(Spacer(1, 1*cm))
-    
-    # Certificate Title - Arabic
-    story.append(Paragraph(reshape_arabic("شهادة إتمام"), heading_style))
-    story.append(Paragraph("Certificate of Completion", body_style))
-    story.append(Spacer(1, 1.5*cm))
-    
-    # Main text
-    center_style = ParagraphStyle(
-        'Center',
-        parent=body_style,
-        fontSize=16,
-        leading=24
-    )
-    story.append(Paragraph(reshape_arabic("تشهد منصة Space Z بأن"), center_style))
-    story.append(Spacer(1, 1*cm))
-    
-    # Student Name
-    student_name = f"{current_user.first_name} {current_user.last_name}"
-    story.append(Paragraph(student_name, name_style))
-    story.append(Spacer(1, 1*cm))
-    
-    # Course completion text
-    story.append(Paragraph(reshape_arabic("قد أتم بنجاح دراسة الكورس التالي"), center_style))
-    story.append(Spacer(1, 0.8*cm))
-    
-    # Course Title
-    course_style = ParagraphStyle(
-        'Course',
-        parent=body_style,
-        fontSize=20,
-        textColor=HexColor("#1a5f7a"),
-        leading=28
-    )
-    course_title = course.title if course else "Course Name"
-    story.append(Paragraph(f"<b>{course_title}</b>", course_style))
-    story.append(Spacer(1, 1.5*cm))
-    
-    # Issue Date
-    issue_date = certificate.issued_at.strftime("%Y/%m/%d")
-    date_style = ParagraphStyle(
-        'Date',
-        parent=body_style,
-        fontSize=12,
-        textColor=HexColor("#6c757d")
-    )
-    story.append(Paragraph(reshape_arabic(f"تاريخ الإصدار: {issue_date}"), date_style))
-    story.append(Spacer(1, 0.8*cm))
-    
-    # Certificate Code
-    code_style = ParagraphStyle(
-        'Code',
-        parent=body_style,
-        fontSize=12,
-        textColor=HexColor("#570a57")
-    )
-    story.append(Paragraph(reshape_arabic(f"رقم الشهادة: <b>{certificate.certificate_code}</b>"), code_style))
-    story.append(Spacer(1, 2*cm))
-    
-    # QR Code and Signature
-    qr_img = Image(qr_buffer, width=3.5*cm, height=3.5*cm)
-    
-    sig_style = ParagraphStyle(
-        'Signature',
-        parent=body_style,
-        fontSize=11,
-        alignment=TA_CENTER
-    )
-    
-    sig_data = [[
-        qr_img,
-        Paragraph("<br/>", body_style),
-        Paragraph(reshape_arabic("____________________") + "<br/>" + reshape_arabic("التوقيع الإلكتروني"), sig_style)
-    ]]
-    
-    sig_table = Table(sig_data, colWidths=[4*cm, 2*cm, 6*cm])
-    sig_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
-    
-    story.append(sig_table)
-    story.append(Spacer(1, 1.5*cm))
-    
-    # Footer
-    footer_style = ParagraphStyle(
-        'Footer',
-        parent=body_style,
-        fontSize=10,
-        textColor=HexColor("#6c757d")
-    )
-    story.append(Paragraph(reshape_arabic("يمكن التحقق من صحة هذه الشهادة عبر الرابط:"), footer_style))
-    
-    link_style = ParagraphStyle(
-        'Link',
-        parent=body_style,
-        fontSize=9,
-        textColor=HexColor("#159895"),
-        wordWrap='RTL'
-    )
-    story.append(Paragraph(f"https://spacez.edu/verify/{certificate.certificate_code}", link_style))
-    
-    # Build PDF
-    doc.build(story, onFirstPage=add_border, onLaterPages=add_border)
-    
+    # دالة رسم الخلفية والنصوص بالإحداثيات المرفوعة
+    def draw_certificate_content(canvas, document):
+        canvas.saveState()
+        
+        # 1. رسم الصورة الخلفية المفرغة المعتمدة
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        bg_path = os.path.join(base_dir, "assets", "cert_template.png")
+        
+        if os.path.exists(bg_path):
+            canvas.drawImage(bg_path, 0, 0, width=document.pagesize[0], height=document.pagesize[1])
+        else:
+            canvas.setFillColor(HexColor("#ffffff"))
+            canvas.rect(0, 0, document.pagesize[0], document.pagesize[1], fill=1, stroke=0)
+        
+        # منتصف المنطقة البيضاء المخصصة للكتابة
+        center_x = 19.7 * cm
+        
+        # 2. طباعة اسم الطالب (تم رفعه من 10.4 إلى 11.2)
+        canvas.setFont("Helvetica-Bold", 32)
+        canvas.setFillColor(HexColor("#0c2d3a"))
+        canvas.drawCentredString(center_x, 11.2 * cm, student_name)
+        
+        # 3. طباعة اسم الكورس (تم رفعه من 7.8 إلى 8.5)
+        canvas.setFont("Helvetica-Bold", 22)
+        canvas.setFillColor(HexColor("#0c2d3a"))
+        canvas.drawCentredString(center_x, 8.5 * cm, course_title)
+        
+        # 4. طباعة الرقم المرجعي للشهادة أسفل اليمين
+        canvas.setFont("Helvetica", 8.5)
+        canvas.setFillColor(HexColor("#778c94"))
+        canvas.drawRightString(28.2 * cm, 1.4 * cm, f"VA-2026-{certificate.certificate_code[-4:]}")
+        
+        canvas.restoreState()
+        
+    # بناء الملف بالاعتماد الصريح على أبعاد الـ Canvas
+    doc.build([Spacer(1, 1)], onFirstPage=draw_certificate_content)
     pdf_buffer.seek(0)
     
     return StreamingResponse(
         pdf_buffer,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{certificate.certificate_code}.pdf"'
+            "Content-Disposition": f'attachment; filename="certificate_{certificate_code}.pdf"'
         }
     )

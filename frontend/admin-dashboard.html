@@ -400,7 +400,7 @@
 
 
 <script>
-const API_BASE = "http://localhost:5000";
+const API_BASE = "http://imamserver962.ddns.net:8000";
 const token = localStorage.getItem("token");
 
 if (!token) {
@@ -417,7 +417,7 @@ async function logout() {
 
   if (token && deviceId) {
     try {
-      await fetch("http://localhost:5000/api/auth/logout", {
+      await fetch("http://imamserver962.ddns.net:8000/api/auth/logout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
